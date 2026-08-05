@@ -1,0 +1,22 @@
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
+
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  // Override default ignores of eslint-config-next.
+  globalIgnores([
+    // Default ignores of eslint-config-next:
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    // functions/ is a separate npm package with its own tsconfig and lint
+    // rules; functions/lib is its tsc output. Linting either from here just
+    // reports the compiler's own CommonJS emit as errors.
+    "functions/**",
+  ]),
+]);
+
+export default eslintConfig;

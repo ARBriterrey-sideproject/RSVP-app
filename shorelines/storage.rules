@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'admin';
+    }
+
+    // Per-event photo albums. The ownerUid segment is what stops guests
+    // overwriting each other's uploads.
+    match /photos/{eventId}/{ownerUid}/{fileId} {
+      allow read: if isSignedIn();
+
+      allow write: if isSignedIn()
+                   && request.auth.uid == ownerUid
+                   && request.resource.size < 15 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      allow delete: if isAdmin();
+    }
+
+    // Voice-note memories: write-only for guests, mirroring the Firestore rule.
+    match /memories/{ownerUid}/{fileId} {
+      allow read: if isAdmin();
+
+      allow write: if isSignedIn()
+                   && request.auth.uid == ownerUid
+                   && request.resource.size < 25 * 1024 * 1024
+                   && request.resource.contentType.matches('audio/.*');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

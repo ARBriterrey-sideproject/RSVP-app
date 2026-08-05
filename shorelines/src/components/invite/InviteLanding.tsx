@@ -1,0 +1,478 @@
+import Link from "next/link";
+import {
+  ACCENT_FILL,
+  COUPLE,
+  DESTINATION,
+  LOGISTICS,
+  WEDDING_DATES,
+  eventDayNumber,
+  eventsForTier,
+  rsvpDeadlineLongLabel,
+  rsvpHref,
+  weddingDateRangeLabel,
+  type Tier,
+  type WeddingEvent,
+} from "@/content/wedding";
+import { ScallopEdge } from "@/components/rsvp/ui";
+
+/**
+ * Screen 1b — the invite landing.
+ *
+ * Unlike the RSVP this is a document, not an app shell: it scrolls the whole
+ * page rather than a pane inside a fixed frame. Everything below the hero
+ * surfaces on scroll via the `scroll-*` utilities in globals.css.
+ *
+ * There is no `"use client"` here on purpose. Every animation on this screen —
+ * the curtain, the staggered rises, the scroll reveals — is CSS, so the whole
+ * landing ships as static HTML with no JS bundle behind it. Adding one piece
+ * of state would quietly undo that; think before you do.
+ *
+ * It is tier-aware where the mockup isn't. The mockup always lists every day
+ * because it has one imagined guest; a reception-only guest shown all five
+ * would be reading an invitation to four events they aren't invited to.
+ */
+export function InviteLanding({ tier }: { tier: Tier }) {
+  const events = eventsForTier(tier);
+
+  return (
+    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand">
+      <Curtain />
+      <Hero />
+
+      <section className="scroll-reveal px-[34px] pt-[34px] pb-2.5 text-center">
+        <p className="text-pretty font-serif text-2xl font-light leading-[1.35] text-driftwood">
+          {events.length === 1
+            ? "One evening barefoot on the same stretch of sand."
+            : `${titleCaseCount(dayCount(events))} days barefoot on the same stretch of sand.`}
+        </p>
+        <p className="mt-3.5 text-pretty font-sans text-[14.5px] leading-[1.75] text-driftwood-soft">
+          {events.length === 1
+            ? "One celebration, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — timings, directions, dress code — lives in this app."
+            : `${titleCaseCount(events.length)} celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.`}
+        </p>
+      </section>
+
+      <div className="scroll-grow px-0 pt-[26px] pb-1.5">
+        <DoubleWave />
+      </div>
+
+      <section className="px-6 pt-1.5">
+        <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
+          {sectionHeading(events.length)}
+        </h2>
+
+        <ul className="flex flex-col gap-2.5">
+          {events.map((event) => (
+            <li key={event.id}>
+              <DayCard event={event} />
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <TravelAndStay />
+      <PhotoBand />
+
+      <section className="scroll-lift px-[30px] pt-[34px] pb-[46px] text-center">
+        <p className="font-serif text-[21px] font-light italic leading-[1.4] text-driftwood">
+          Will you be with us?
+        </p>
+        <p className="mt-2 font-sans text-[13px] leading-[1.6] text-driftwood-soft">
+          Kindly reply by {rsvpDeadlineLongLabel()}
+        </p>
+
+        <div className="mt-5 flex flex-col gap-2.5">
+          {/* The tier rides along in the href. Without it the RSVP falls back
+              to `full` and a narrow invite quietly widens itself. */}
+          <Link
+            href={rsvpHref(tier)}
+            className="rounded-pill bg-coral p-4 font-sans text-[14.5px] font-medium leading-none tracking-[0.04em] text-foam shadow-[0_8px_22px_rgba(226,138,118,0.4)] transition-colors hover:bg-coral-deep"
+          >
+            RSVP for your family
+          </Link>
+          <a
+            href="#travel"
+            className="rounded-pill border border-deeptide/50 p-[15px] font-sans text-[14.5px] font-medium leading-none text-deeptide transition-colors hover:bg-deeptide/7"
+          >
+            Travel &amp; stay details
+          </a>
+        </div>
+
+        <SingleWave className="mx-auto mt-8 w-[70%] text-warmgold opacity-60" />
+        <p className="mt-3.5 font-display text-[22px] leading-none text-driftwood-soft">
+          see you by the water
+        </p>
+        <p className="mt-6 font-sans text-[11px] tracking-wide text-driftwood-faint">
+          Made by ARBriterrey
+        </p>
+      </section>
+    </main>
+  );
+}
+
+function sectionHeading(count: number): string {
+  if (count === 1) return "The day";
+  return `The ${countWord(count)} days`;
+}
+
+/**
+ * Copy counts everything rather than hardcoding it. The schedule has already
+ * moved once — five events over four days became five over three — and prose
+ * that says "four days" while the list below shows three is the kind of error
+ * nobody notices until a guest does.
+ */
+const COUNT_WORDS = [
+  "",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+];
+
+function countWord(count: number): string {
+  return COUNT_WORDS[count] ?? String(count);
+}
+
+function titleCaseCount(count: number): string {
+  const word = countWord(count);
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** Distinct calendar days the guest is invited across, in the wedding's zone. */
+function dayCount(events: WeddingEvent[]): number {
+  const days = new Set(
+    events.map((event) =>
+      new Intl.DateTimeFormat("en-CA", {
+        dateStyle: "short",
+        timeZone: WEDDING_DATES.timeZone,
+      }).format(new Date(event.startsAt))
+    )
+  );
+  return days.size;
+}
+
+/**
+ * The sand panel that holds the monogram, then lifts.
+ *
+ * Plays on every load, by request. An earlier version showed it once per
+ * session and skipped it thereafter — that turned out to be the wrong trade
+ * twice over. It made the invite feel different on the second open, and
+ * because the hero's rise delays (3s+) are tuned to the curtain clearing, a
+ * skipped curtain left three seconds of empty gradient where the names should
+ * be. Keeping the two in lockstep is what makes the opening read as one move.
+ *
+ * `pointer-events-none` matters: the curtain sits over the whole page for
+ * ~2 seconds, and a guest who taps in that window should reach the page under
+ * it, not the panel.
+ */
+function Curtain() {
+  return (
+    <div
+      aria-hidden
+      className="animate-curtain pointer-events-none fixed inset-0 z-20 mx-auto flex max-w-md items-center justify-center overflow-hidden bg-sunbleach"
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_40%,rgba(255,255,255,0.7),transparent_70%)]" />
+
+      <div className="animate-mono-out text-center">
+        <SingleWave className="mx-auto mb-3.5 w-[120px] text-warmgold" />
+        <div className="font-display text-[40px] leading-[1.1] text-deeptide">
+          {COUPLE.partnerA.charAt(0)}{" "}
+          <span className="text-warmgold">&amp;</span>{" "}
+          {COUPLE.partnerB.charAt(0)}
+        </div>
+        <div className="mt-3.5 font-sans text-[9px] font-medium uppercase tracking-[0.4em] text-[#8c6b3a]">
+          {DESTINATION.shortLabel}
+        </div>
+      </div>
+
+      <ScallopEdge className="text-sunbleach" />
+    </div>
+  );
+}
+
+/**
+ * The 600px opening panel: teal at the top falling to a peach horizon, two
+ * palms leaning in from the edges, the names, and a scroll hint.
+ *
+ * The text delays start at 3s so the lines arrive as the curtain clears. The
+ * two are a single choreographed move — change one delay and the other has to
+ * follow, or the names rise onto a panel that hasn't lifted yet.
+ */
+function Hero() {
+  return (
+    <div className="relative h-[600px] overflow-hidden bg-[linear-gradient(170deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_40%,var(--color-shallows)_72%,var(--color-horizon)_100%)]">
+      <div className="animate-glow absolute inset-0 bg-[radial-gradient(38%_26%_at_70%_70%,rgba(255,236,200,0.85),transparent_70%)]" />
+
+      <Palm className="animate-sway absolute -left-[26px] -top-3.5 w-[190px] opacity-50" />
+      <Palm
+        short
+        className="animate-sway-b absolute -right-10 top-[26px] w-[210px] opacity-[0.34]"
+      />
+
+      <div className="absolute inset-x-0 top-[150px] px-[34px] text-center">
+        <p
+          className="animate-rise font-sans text-[9.5px] font-medium uppercase tracking-[0.42em] text-[rgba(251,246,238,0.8)]"
+          style={{ animationDelay: "3s" }}
+        >
+          Save the date
+        </p>
+
+        <p
+          className="animate-rise mt-5 font-display text-[70px] leading-[0.9] text-[#fff9f0] [text-shadow:0_3px_26px_rgba(15,62,64,0.35)]"
+          style={{ animationDelay: "3.15s" }}
+        >
+          {COUPLE.partnerA}
+        </p>
+        <p
+          className="animate-rise my-2 font-serif text-xl font-light italic leading-none text-[#f6d9a8]"
+          style={{ animationDelay: "3.5s" }}
+        >
+          and
+        </p>
+        <p
+          className="animate-rise font-display text-[70px] leading-[0.9] text-[#fff9f0] [text-shadow:0_3px_26px_rgba(15,62,64,0.35)]"
+          style={{ animationDelay: "3.4s" }}
+        >
+          {COUPLE.partnerB}
+        </p>
+
+        <div
+          className="animate-rise mt-[26px] flex items-center justify-center gap-3"
+          style={{ animationDelay: "3.9s" }}
+        >
+          <span className="h-px w-[34px] bg-[rgba(251,246,238,0.5)]" />
+          <span className="font-sans text-[12.5px] uppercase leading-[1.6] tracking-[0.2em] text-[#fff9f0]">
+            {weddingDateRangeLabel()}
+          </span>
+          <span className="h-px w-[34px] bg-[rgba(251,246,238,0.5)]" />
+        </div>
+
+        <p
+          className="animate-rise mt-2 font-serif text-[15px] font-light leading-[1.5] tracking-[0.06em] text-[rgba(255,249,240,0.9)]"
+          style={{ animationDelay: "4.05s" }}
+        >
+          {DESTINATION.label}
+        </p>
+      </div>
+
+      <div
+        className="animate-rise absolute inset-x-0 bottom-[38px] flex flex-col items-center gap-2"
+        style={{ animationDelay: "4.4s" }}
+      >
+        <span className="font-sans text-[10px] uppercase tracking-[0.3em] text-[rgba(251,246,238,0.75)]">
+          Scroll
+        </span>
+        <span className="h-[26px] w-px bg-[linear-gradient(rgba(251,246,238,0.8),transparent)]" />
+      </div>
+
+      <ScallopEdge className="text-sand" />
+    </div>
+  );
+}
+
+function DayCard({ event }: { event: WeddingEvent }) {
+  return (
+    <div className="scroll-reveal flex items-center gap-3.5 rounded-card bg-card px-4 py-3.5">
+      <span
+        className={`grid size-[34px] flex-none place-items-center rounded-full font-sans text-xs font-medium text-foam ${
+          ACCENT_FILL[event.accent]
+        }`}
+      >
+        {eventDayNumber(event.startsAt)}
+      </span>
+      <span className="flex-1">
+        <span className="block font-display text-[26px] leading-none text-driftwood">
+          {event.name}
+        </span>
+        <span className="mt-1 block font-sans text-xs leading-[1.4] text-driftwood-soft">
+          {event.daypart} · {event.venueShort} · {event.dressCode}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The mockup's second CTA reads "Travel & stay details" and, being a mockup,
+ * goes nowhere — that screen exists in no version of the plan. Rather than
+ * invent a route, the button jumps to this section, which shows the logistics
+ * the app already holds.
+ *
+ * Rail comes before air, which is the opposite of the mockup's ordering. That
+ * is geography, not preference: Brahmapur is 16km away and Bhubaneswar is 170,
+ * so for most guests the train genuinely is the shorter way in.
+ *
+ * NOTE: the shuttle and room block are PLACEHOLDERS from LOGISTICS — neither is
+ * arranged yet. The airport and station themselves are real.
+ */
+function TravelAndStay() {
+  return (
+    <section id="travel" className="scroll-reveal scroll-mt-6 px-6 pt-9">
+      <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
+        Travel &amp; stay
+      </h2>
+
+      <div className="flex flex-col gap-2.5">
+        <LogisticsRow
+          title={`Train to ${LOGISTICS.station.name}`}
+          description={LOGISTICS.station.note}
+        />
+        <LogisticsRow
+          title={`Fly into ${LOGISTICS.airport.code} (${LOGISTICS.airport.name})`}
+          description={LOGISTICS.airport.note}
+        />
+        <LogisticsRow
+          title={LOGISTICS.shuttle.title}
+          description={LOGISTICS.shuttle.description}
+        />
+        <LogisticsRow
+          title={LOGISTICS.stay.title}
+          description={LOGISTICS.stay.description}
+        />
+      </div>
+
+      <p className="mt-3.5 text-center font-sans text-[11.5px] leading-[1.6] text-driftwood-faint">
+        Tell us how you&apos;re arriving when you RSVP and we&apos;ll send a car.
+      </p>
+    </section>
+  );
+}
+
+function LogisticsRow({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-card bg-card px-4 py-3.5">
+      <p className="font-sans text-[14.5px] font-medium leading-tight text-driftwood">
+        {title}
+      </p>
+      <p className="mt-1 font-sans text-xs leading-[1.5] text-driftwood-soft">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+/** The scalloped photo band. A placeholder until the couple supply an image. */
+function PhotoBand() {
+  return (
+    <div className="scroll-lift relative mt-[30px] h-[230px] bg-[linear-gradient(140deg,var(--color-dune),var(--color-dune-deep))]">
+      <div className="animate-tide absolute inset-0 bg-[radial-gradient(50%_60%_at_30%_40%,rgba(111,169,166,0.45),transparent_70%),radial-gradient(50%_50%_at_75%_60%,rgba(226,138,118,0.4),transparent_70%)] blur-[4px]" />
+
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+        <Shell className="w-11 text-bark opacity-55" />
+        <span className="font-sans text-[11px] uppercase leading-none tracking-[0.24em] text-bark">
+          Photo — couple on the shore
+        </span>
+      </div>
+
+      <ScallopEdge edge="top" className="text-sand" />
+      <ScallopEdge className="text-sand" />
+    </div>
+  );
+}
+
+/* --- line art ------------------------------------------------------------ */
+
+function Palm({
+  className = "",
+  short = false,
+}: {
+  className?: string;
+  short?: boolean;
+}) {
+  return (
+    <svg viewBox="0 0 60 60" aria-hidden className={className}>
+      <g
+        fill="none"
+        stroke="var(--color-tideline)"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      >
+        <path d="M30 0 C30 18 30 34 30 52" />
+        <path d="M30 14 C22 16 16 22 13 30" />
+        <path d="M30 14 C38 16 44 22 47 30" />
+        {short ? (
+          <>
+            <path d="M30 26 C23 28 18 34 16 41" />
+            <path d="M30 26 C37 28 42 34 44 41" />
+          </>
+        ) : (
+          <>
+            <path d="M30 24 C23 26 18 32 16 39" />
+            <path d="M30 24 C37 26 42 32 44 39" />
+            <path d="M30 34 C25 36 21 41 20 47" />
+            <path d="M30 34 C35 36 39 41 40 47" />
+          </>
+        )}
+      </g>
+    </svg>
+  );
+}
+
+function Shell({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 60 50" aria-hidden className={className}>
+      <path
+        d="M30 46 C12 46 4 30 8 18 C11 8 22 4 30 4 C38 4 49 8 52 18 C56 30 48 46 30 46 Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <g stroke="currentColor" strokeWidth=".9" fill="none" opacity=".8">
+        <path d="M30 45 L30 5" />
+        <path d="M30 45 L18 8" />
+        <path d="M30 45 L42 8" />
+        <path d="M30 45 L9 17" />
+        <path d="M30 45 L51 17" />
+      </g>
+    </svg>
+  );
+}
+
+function SingleWave({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 10" aria-hidden className={className} fill="none">
+      <path
+        d="M2 6 Q14 1 26 6 T50 6 T74 6 T98 6"
+        stroke="currentColor"
+        strokeWidth=".9"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** The teal-over-gold divider under the intro paragraph. */
+function DoubleWave() {
+  return (
+    <svg
+      viewBox="0 0 100 14"
+      aria-hidden
+      preserveAspectRatio="none"
+      className="h-[26px] w-full"
+      fill="none"
+    >
+      <path
+        d="M2 8 Q14 1 26 8 T50 8 T74 8 T98 8"
+        stroke="var(--color-shallows)"
+        strokeWidth=".9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M2 12 Q14 6 26 12 T50 12 T74 12 T98 12"
+        stroke="var(--color-warmgold)"
+        strokeWidth=".7"
+        strokeLinecap="round"
+        opacity=".7"
+      />
+    </svg>
+  );
+}

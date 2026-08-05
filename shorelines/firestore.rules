@@ -1,0 +1,106 @@
+rules_version = '2';
+
+/*
+ * Guiding rule: clients NEVER write anything sensitive directly.
+ * RSVP submission, poll votes and song requests all go through callable
+ * Cloud Functions, which use the Admin SDK and bypass these rules entirely.
+ * So the client-facing posture here is deliberately read-mostly — if a write
+ * path is open below, that is a bug, not a convenience.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Set as a custom claim on real (email/Google) accounts for the couple
+      // and coordinators. Phone-auth guests never carry this.
+      return isSignedIn() && request.auth.token.role == 'admin';
+    }
+
+    function isOwner(ownerUid) {
+      return isSignedIn() && request.auth.uid == ownerUid;
+    }
+
+    // ---- RSVPs -------------------------------------------------------------
+    // Doc id IS the phone-auth uid, which is what makes "same number returns to
+    // the same record" work without any lookup.
+    match /rsvps/{ownerUid} {
+      // A guest can read only their own. Admins can read all.
+      allow get: if isOwner(ownerUid) || isAdmin();
+      allow list: if isAdmin();
+
+      // No client writes at all — not even from an admin. Creation and edits
+      // go through the submitRsvp callable so that party-size caps and tier
+      // immutability are enforced somewhere the client cannot reach, and the
+      // speakeasy flag goes through setSpeakeasyInvite for the same reason.
+      allow create, update, delete: if false;
+    }
+
+    // ---- Share links (the family QR) ---------------------------------------
+    // The read-only mirror a scanned QR lands on, keyed by an unguessable code
+    // that the callable mints. The code IS the capability, so `get` is open —
+    // a scanner has no account and cannot be asked to sign in.
+    //
+    // Two things keep that safe, and both are enforced in submitRsvp, not here:
+    // the mirror carries names only (no phone, travel or notes), and
+    // invitation-only events are stripped out of it.
+    match /invites/{shareCode} {
+      allow get: if true;
+      // Never listable: enumerating this collection would hand over every
+      // family's code at once and defeat the unguessable id entirely.
+      allow list: if false;
+      allow write: if false;
+    }
+
+    // ---- Events ------------------------------------------------------------
+    // Public read: the timeline and Today screen need these before sign-in.
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- Polls (v2) --------------------------------------------------------
+    match /polls/{pollId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // One vote per verified phone per poll is enforced by the compound doc id
+    // plus the callable. Reads are open to signed-in guests so results render.
+    match /pollVotes/{voteId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // ---- Song requests (v2) ------------------------------------------------
+    // Cutoff is checked server-side against the event's real start time.
+    match /songRequests/{requestId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // ---- Memories (v2) -----------------------------------------------------
+    // A private one-way inbox to the couple, NOT a public feed: guests may
+    // create but never read back — not even their own.
+    match /memories/{memoryId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+                    && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ---- Admin-only aggregates --------------------------------------------
+    match /aggregates/{docId} {
+      allow read: if isAdmin();
+      allow write: if false; // written by Functions only
+    }
+
+    // Deny anything not matched above.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
