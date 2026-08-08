@@ -45,12 +45,14 @@ import type {
 } from "./schema";
 
 export type {
+  EmergencyContact,
   EventAccent,
   EventId,
   ScheduleItem,
   Tier,
   WeddingConfig,
   WeddingEvent,
+  WeddingOverlay,
 } from "./schema";
 
 /**

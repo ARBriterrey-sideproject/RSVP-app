@@ -1,22 +1,33 @@
 "use client";
 
+import { useState } from "react";
 import { COUPLE } from "@/content/wedding";
+import type { WeddingConfig, WeddingOverlay } from "@/content/schema";
 import { ROLE_COPY, type Capability } from "@/lib/auth/roles";
+import { EmergencyContactsPanel } from "./EmergencyContactsPanel";
+import { SchedulePanel } from "./SchedulePanel";
 import { useStaffAuth } from "./StaffAuthProvider";
 
 /**
- * The shell the panels will hang off. Everything below is gated by capability
- * rather than by role name, so moving a panel between roles is an edit to
- * CAPABILITIES in src/lib/auth/roles.ts and nothing else.
+ * The shell the panels hang off. Everything below is gated by capability rather
+ * than by role name, so moving a panel between roles is an edit to CAPABILITIES
+ * in src/lib/auth/roles.ts and nothing else.
  *
- * The panels themselves are unbuilt — this renders the real access decision for
- * each so the couple can see exactly what a coordinator's login would show
- * before anyone is handed one.
+ * Panels without a `render` are unbuilt, and say so. Keeping them listed is
+ * deliberate: the couple can see exactly what a coordinator's login would show
+ * before anyone is handed one, and what is still coming.
  */
+
+interface PanelContext {
+  config: WeddingConfig;
+  overlay: WeddingOverlay | null;
+}
+
 const PANELS: {
   capability: Capability;
   title: string;
   description: string;
+  render?: (context: PanelContext) => React.ReactNode;
 }[] = [
   {
     capability: "viewResponses",
@@ -37,6 +48,9 @@ const PANELS: {
     capability: "editEmergencyContacts",
     title: "Emergency contacts",
     description: "The numbers guests see on the Today screen.",
+    render: ({ overlay }) => (
+      <EmergencyContactsPanel contacts={overlay?.emergencyContacts ?? []} />
+    ),
   },
   {
     capability: "grantSpeakeasy",
@@ -51,7 +65,8 @@ const PANELS: {
   {
     capability: "editSchedule",
     title: "Schedule",
-    description: "Times, venues and dress codes for the five days.",
+    description: "Move a ceremony or a meal. Takes effect without a new build.",
+    render: ({ config }) => <SchedulePanel config={config} />,
   },
   {
     capability: "manageStaff",
@@ -60,8 +75,10 @@ const PANELS: {
   },
 ];
 
-export function DashboardHome() {
+export function DashboardHome({ config, overlay }: PanelContext) {
   const { state, allows, signOut } = useStaffAuth();
+  const [open, setOpen] = useState<Capability | null>(null);
+
   if (state.status !== "ready") return null;
 
   const { user, role } = state;
@@ -97,24 +114,45 @@ export function DashboardHome() {
       </div>
 
       <ul className="mt-6 flex flex-col gap-2.5">
-        {visible.map((panel) => (
-          <li
-            key={panel.capability}
-            className="rounded-card border border-dashed border-hairline-dashed bg-white p-4"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="font-sans text-[15.5px] font-medium leading-tight text-driftwood">
-                {panel.title}
-              </span>
-              <span className="shrink-0 font-sans text-[10px] uppercase tracking-[0.16em] text-driftwood-faint">
-                Coming next
-              </span>
-            </div>
-            <p className="mt-1 font-sans text-xs leading-snug text-driftwood-soft">
-              {panel.description}
-            </p>
-          </li>
-        ))}
+        {visible.map((panel) => {
+          const expanded = open === panel.capability;
+          const built = Boolean(panel.render);
+
+          return (
+            <li
+              key={panel.capability}
+              className={
+                built
+                  ? "rounded-card bg-card p-4"
+                  : "rounded-card border border-dashed border-hairline-dashed bg-white p-4"
+              }
+            >
+              <button
+                type="button"
+                disabled={!built}
+                aria-expanded={built ? expanded : undefined}
+                onClick={() =>
+                  setOpen(expanded ? null : panel.capability)
+                }
+                className="w-full text-left disabled:cursor-default"
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-sans text-[15.5px] font-medium leading-tight text-driftwood">
+                    {panel.title}
+                  </span>
+                  <span className="shrink-0 font-sans text-[10px] uppercase tracking-[0.16em] text-driftwood-faint">
+                    {built ? (expanded ? "Close" : "Open") : "Coming next"}
+                  </span>
+                </div>
+                <p className="mt-1 font-sans text-xs leading-snug text-driftwood-soft">
+                  {panel.description}
+                </p>
+              </button>
+
+              {expanded ? panel.render?.({ config, overlay }) : null}
+            </li>
+          );
+        })}
       </ul>
 
       <p className="mt-6 font-sans text-xs leading-relaxed text-driftwood-faint">

@@ -1,5 +1,6 @@
 import { RsvpFlow } from "@/components/rsvp/RsvpFlow";
 import { resolveTier } from "@/content/wedding";
+import { getLiveWeddingConfig } from "@/lib/wedding/live";
 
 /**
  * Screen 1c. Reached from the landing's CTA, which passes the same opaque
@@ -11,5 +12,18 @@ import { resolveTier } from "@/content/wedding";
  */
 export default async function RsvpPage({ searchParams }: PageProps<"/rsvp">) {
   const params = await searchParams;
-  return <RsvpFlow tier={resolveTier(params.tier)} />;
+
+  /*
+   * The live config is resolved here, on the server, and handed to the flow as
+   * a prop. RsvpFlow is a client component and needs the events to render the
+   * day-picker, so this is the boundary where the merge has to have happened —
+   * a guest picking days must be picking the times the couple last set, not the
+   * ones compiled into the bundle.
+   */
+  return (
+    <RsvpFlow
+      tier={resolveTier(params.tier)}
+      config={await getLiveWeddingConfig()}
+    />
+  );
 }

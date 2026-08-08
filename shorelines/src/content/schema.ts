@@ -190,3 +190,62 @@ export interface WeddingConfig {
   schedule: ScheduleItem[];
   party: { softCap: number };
 }
+
+/* -------------------------------------------------------------------------
+ * The runtime overlay — the half of a wedding that changes without a rebuild.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * WHAT THE COUPLE CAN CHANGE AFTER THE APP IS BUILT.
+ *
+ * The config literal above is compiled in, so changing it means a rebuild and a
+ * redeploy — which is the correct answer for anything structural, and the wrong
+ * answer for a time. Weddings move times in the last fortnight, from a phone, at
+ * a venue, by someone who does not have repo access. That is what this is for.
+ *
+ * The split follows one test: **does the change alter the shape of the app?**
+ *
+ *   Rebuild (stays in `WeddingConfig`)   Overlay (lives in Firestore)
+ *   ──────────────────────────────────   ────────────────────────────
+ *   which events exist, and their ids    when each event starts and ends
+ *   which tiers can see them             when each meal is served
+ *   how many days                        who to call in an emergency
+ *   locales, theme, RSVP steps
+ *   party cap
+ *
+ * Everything here is optional at every level. An absent overlay — no document,
+ * a failed read, a field nobody has touched — leaves the literal showing, which
+ * is what makes this safe to ship before the dashboard that writes it exists.
+ *
+ * Deliberately NOT here yet: venue names and dress codes. They are translated
+ * through the catalogue-override path in `i18n/weddingCopy.ts`, and a string a
+ * couple types into a dashboard is a string no catalogue knows — hi/kn/or would
+ * silently fall back to English with nothing in the console to say so. Times
+ * don't have that problem because `Intl` formats them and no translator ever
+ * sees them. Text needs a per-locale editor first; see Core_and_Studio.md.
+ */
+export interface WeddingOverlay {
+  /** Keyed by `WeddingEvent.id`. An unknown id is ignored, not an error. */
+  events?: Record<string, { startsAt?: string; endsAt?: string }>;
+  /** Keyed by `ScheduleItem.id`. */
+  schedule?: Record<string, { startsAt?: string }>;
+  /**
+   * Runtime-native: these have no counterpart in the literal and never should.
+   * A phone number that can only be corrected by a developer is worse than no
+   * phone number, because the whole point of the list is the day it's needed.
+   */
+  emergencyContacts?: EmergencyContact[];
+  /** ISO 8601. Written server-side; shown in the dashboard as "last edited". */
+  updatedAt?: string;
+  /** The staff uid that last wrote this. Audit only, never rendered to guests. */
+  updatedBy?: string;
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  /** "Groom's brother", "Hotel front desk" — who this person is to a guest. */
+  role: string;
+  /** Stored as the couple types it; rendered into a `tel:` link. */
+  phone: string;
+}

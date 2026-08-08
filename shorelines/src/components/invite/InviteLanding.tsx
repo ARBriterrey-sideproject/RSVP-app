@@ -12,6 +12,7 @@ import {
   rsvpHref,
   weddingDateRangeLabel,
   type Tier,
+  type WeddingConfig,
   type WeddingEvent,
 } from "@/content/wedding";
 import { DEFAULT_LOCALE, LOCALE_TAGS, isLocale } from "@/i18n/locales";
@@ -37,8 +38,20 @@ import { ScallopEdge } from "@/components/rsvp/ui";
  * because it has one imagined guest; a reception-only guest shown all five
  * would be reading an invitation to four events they aren't invited to.
  */
-export async function InviteLanding({ tier }: { tier: Tier }) {
-  const events = eventsForTier(tier);
+/**
+ * `config` is passed in rather than imported so that the times rendered here
+ * are the *live* ones — the literal with the couple's dashboard edits merged
+ * over it. Importing `EVENTS` directly would pin this screen to whatever was
+ * compiled in, and a schedule change would need a redeploy to show up.
+ */
+export async function InviteLanding({
+  tier,
+  config,
+}: {
+  tier: Tier;
+  config: WeddingConfig;
+}) {
+  const events = eventsForTier(tier, config);
   const t = await getTranslations("landing");
   const tCommon = await getTranslations("common");
   const tag = await localeTag();

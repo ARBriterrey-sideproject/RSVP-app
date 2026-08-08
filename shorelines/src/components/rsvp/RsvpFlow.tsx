@@ -15,6 +15,7 @@ import {
   normaliseDietary,
   type DietaryOption,
   type Tier,
+  type WeddingConfig,
 } from "@/content/wedding";
 import {
   emptyTravel,
@@ -45,7 +46,19 @@ const RECAPTCHA_CONTAINER_ID = "shorelines-recaptcha";
  * That is what puts the sticky CTA where the mockup puts it — under the thumb,
  * clear of the home indicator — instead of at the end of the document.
  */
-export function RsvpFlow({ tier }: { tier: Tier }) {
+export function RsvpFlow({
+  tier,
+  config,
+}: {
+  tier: Tier;
+  /**
+   * The live config — the literal with the couple's runtime edits merged over
+   * it — resolved on the server by `/rsvp/page.tsx` and passed down. This is a
+   * client component, so it cannot do that read itself; taking the config as a
+   * prop is what stops the day-picker rendering times that were true at build.
+   */
+  config: WeddingConfig;
+}) {
   const t = useTranslations("rsvp");
   const tCommon = useTranslations("common");
   const tWedding = useTranslations("wedding");
@@ -64,8 +77,8 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
   const [speakeasyInvited, setSpeakeasyInvited] = useState(false);
 
   const events = useMemo(
-    () => eventsForGuest(effectiveTier, { speakeasyInvited }),
-    [effectiveTier, speakeasyInvited]
+    () => eventsForGuest(effectiveTier, { speakeasyInvited, config }),
+    [effectiveTier, speakeasyInvited, config]
   );
 
   // Minted by the callable on first submission; the QR on the done screen
@@ -127,7 +140,10 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
       >;
       setAttending(
         Object.fromEntries(
-          eventsForGuest(nextTier, { speakeasyInvited: invited }).map((e) => [
+          eventsForGuest(nextTier, {
+            speakeasyInvited: invited,
+            config,
+          }).map((e) => [
             e.id,
             previous[e.id] === true,
           ])
@@ -137,7 +153,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
       if (typeof stored.notes === "string") setNotes(stored.notes);
       setTravel(hydrateTravel(stored.travel));
     });
-  }, [tier]);
+  }, [tier, config]);
 
   const attendingCount = events.filter((e) => attending[e.id]).length;
   const declining = attendingCount === 0;

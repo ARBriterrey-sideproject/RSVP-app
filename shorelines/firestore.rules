@@ -73,13 +73,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ---- Events ------------------------------------------------------------
-    // Public read: the timeline and Today screen need these before sign-in.
-    match /events/{eventId} {
-      allow read: if true;
-      // Moving a ceremony reshapes every guest's schedule (and, via
-      // mealsForEvents, which meals they see) — that's the couple's call.
-      allow write: if isCouple();
+    // ---- The runtime overlay ------------------------------------------------
+    // One document, `config/live`: the half of a wedding's facts the couple can
+    // change without a rebuild — event and meal times, and the emergency
+    // contacts. Everything structural stays compiled in. See WeddingOverlay in
+    // src/content/schema.ts for the split and why.
+    //
+    // `get` is open for the same reason `invites/{shareCode}` is: the landing
+    // renders before anyone signs in, and every value in here is already on the
+    // face of the invitation. Nothing private may be added to this document —
+    // it is world-readable to anyone who has the link.
+    //
+    // Writes are closed to everyone including admins. Times are not free-form:
+    // mealsForEvents windows a guest's meals between their first event's start
+    // and their last event's end, so an inverted pair silently empties a meal
+    // list rather than failing. That check belongs somewhere a client cannot
+    // reach — the updateWeddingLive callable, gated on editSchedule /
+    // editEmergencyContacts.
+    //
+    // Replaces an earlier speculative /events/{eventId} collection that nothing
+    // ever read. Two places to store an event's time is how they drift apart.
+    match /config/live {
+      allow get: if true;
+      allow list: if false;
+      allow write: if false;
     }
 
     // ---- Polls (v2) --------------------------------------------------------

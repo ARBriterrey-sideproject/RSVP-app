@@ -18,6 +18,7 @@ import {
   weddingDateRangeLabel,
   type ScheduleItem,
   type Tier,
+  type WeddingConfig,
   type WeddingEvent,
 } from "@/content/wedding";
 import { getFirebase } from "@/lib/firebase/client";
@@ -39,7 +40,19 @@ import { ScallopEdge } from "@/components/rsvp/ui";
  * the Next app; the open `get` rule on `invites/{code}` is what makes it work,
  * and the code being unguessable is what makes that safe.
  */
-export function SharedInvite({ shareCode }: { shareCode: string }) {
+export function SharedInvite({
+  shareCode,
+  config,
+}: {
+  shareCode: string;
+  /**
+   * Live config from the server page. The invite document itself is still read
+   * client-side — only the reply is per-guest and it needs the browser's open
+   * `get` on `invites/{code}` — but the *times* around it are the couple's
+   * current ones, merged before this component ever renders.
+   */
+  config: WeddingConfig;
+}) {
   const t = useTranslations("shared");
   const tWedding = useTranslations("wedding");
   const tCommon = useTranslations("common");
@@ -77,13 +90,13 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
     );
   }
 
-  const events = eventsForTier(invite.tier);
+  const events = eventsForTier(invite.tier, config);
   const attending = events.filter((e) => invite.perEventAttendance[e.id]);
   const named = invite.party.filter((m) => m.name.trim().length > 0);
   const host = named[0]?.name.trim();
   // Meals scoped to the days this family is actually here for — a reception-only
   // party has no use for the breakfast that morning.
-  const meals = mealsForEvents(attending);
+  const meals = mealsForEvents(attending, config);
 
   return (
     <Frame>

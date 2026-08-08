@@ -1,4 +1,5 @@
 import { SharedInvite } from "@/components/invite/SharedInvite";
+import { getLiveWeddingConfig } from "@/lib/wedding/live";
 
 /**
  * Where a scanned family QR lands: the invitation, read-only.
@@ -16,5 +17,11 @@ export default async function SharedInvitePage({
   params,
 }: PageProps<"/i/[code]">) {
   const { code } = await params;
-  return <SharedInvite shareCode={code} />;
+
+  /*
+   * A QR gets scanned at the venue, often by someone who has never opened the
+   * app before. This is therefore the screen where stale times are worst — so
+   * it reads the live config like everything else, rather than the literal.
+   */
+  return <SharedInvite shareCode={code} config={await getLiveWeddingConfig()} />;
 }

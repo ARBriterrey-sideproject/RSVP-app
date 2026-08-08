@@ -581,3 +581,239 @@ function newShareCode(): string {
   for (const byte of bytes) out += alphabet[byte % alphabet.length];
   return out;
 }
+
+/* -------------------------------------------------------------------------
+ * The runtime overlay — config/live.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * ISO 8601 instant with an explicit offset, e.g. 2026-12-29T11:28:00+05:30.
+ *
+ * `Date.parse` alone is far too permissive — it accepts "December 29" and
+ * resolves it against the current year in the *server's* zone, so a half-typed
+ * value would be stored as a real timestamp in the wrong place instead of being
+ * rejected. The shape has to be checked before the value is.
+ */
+const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?([+-]\d{2}:\d{2}|Z)$/;
+
+const MAX_SCHEDULE_KEYS = 40;
+const MAX_CONTACTS = 20;
+
+function parseInstant(value: unknown, field: string): string {
+  assert(typeof value === "string", `${field} must be a string`);
+  assert(INSTANT.test(value as string), `${field} must be an ISO 8601 instant`);
+  assert(!Number.isNaN(Date.parse(value as string)), `${field} is not a real date`);
+  return value as string;
+}
+
+/**
+ * Writes the couple's runtime edits to `config/live`.
+ *
+ * This is the answer to "the Haldi moved to 11 — do we redeploy?". Event and
+ * meal times and the emergency contact list live in one Firestore document that
+ * the app merges over its compiled-in config on every render, so a change here
+ * is live inside a minute with no build, no deploy and no repo access.
+ *
+ * Two capabilities, checked per section rather than once at the top, because
+ * they genuinely differ: moving a ceremony is the couple's call (it reshapes
+ * every guest's schedule and, through mealsForEvents, which meals they see),
+ * while a coordinator is exactly the person who should be able to correct the
+ * hotel's front-desk number at 11pm. A coordinator sending both sections gets
+ * the contacts written and the times refused — as one error, before anything is
+ * written, so a partial success is impossible.
+ *
+ * Firestore rules deny every client write to this document, so this callable is
+ * the only way in. That is not belt-and-braces: an inverted start/end pair does
+ * not fail anywhere downstream, it silently empties a guest's meal list, and a
+ * check that only exists in a dashboard form is a check a `curl` skips.
+ *
+ * Sending `null` for an event or schedule entry clears that override and lets
+ * the value compiled into the build show through again — the "put it back how
+ * it was" affordance, which matters more than it sounds when someone has just
+ * mistyped a time an hour before an event.
+ */
+export const updateWeddingLive = onCall(
+  { region: REGION, enforceAppCheck: false },
+  async (request) => {
+    const rank = rankOf(request.auth?.token.role);
+    assertSignedInStaff(rank);
+
+    const { events, schedule, emergencyContacts } = (request.data ?? {}) as {
+      events?: unknown;
+      schedule?: unknown;
+      emergencyContacts?: unknown;
+    };
+
+    const touchesTimes = events !== undefined || schedule !== undefined;
+    const touchesContacts = emergencyContacts !== undefined;
+    assert(
+      touchesTimes || touchesContacts,
+      "Nothing to update."
+    );
+
+    // editSchedule = couple (2). Keep in sync with CAPABILITIES in
+    // src/lib/auth/roles.ts.
+    if (touchesTimes && rank < RANK.couple) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the couple can change the schedule."
+      );
+    }
+
+    const update: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+      updatedBy: request.auth?.uid ?? null,
+    };
+
+    /*
+     * Nested maps, NOT dotted keys.
+     *
+     * `set(…, {merge: true})` reads a string key as a field *name*, dots and
+     * all — so `update["events.haldi"] = …` writes a top-level field literally
+     * called "events.haldi" and the reader's `overlay.events` stays undefined.
+     * It looks right in the console and silently overrides nothing. Only
+     * `update()` reads dots as a path, and `update()` throws when the document
+     * doesn't exist, which it doesn't until the first save.
+     *
+     * `merge: true` merges maps recursively, so writing `{events: {haldi: …}}`
+     * still leaves `events.mehendi` alone — two people editing different rows
+     * don't clobber each other, which was the point of the dotted keys anyway.
+     *
+     * One exception, and it bites: an EMPTY map is a leaf in the merge mask, so
+     * `{schedule: {}}` replaces the whole section with nothing rather than
+     * merging nothing into it. A caller sending an empty section is saying "no
+     * changes here", never "delete every override" — clearing one is per-id, by
+     * sending `null` for that id. Hence the length checks before assigning.
+     */
+    const eventPatch: Record<string, unknown> = {};
+    const schedulePatch: Record<string, unknown> = {};
+
+    if (events !== undefined) {
+      assertPlainObject(events, "events");
+      for (const [id, patch] of Object.entries(events as Record<string, unknown>)) {
+        assert(
+          (EVENT_IDS as readonly string[]).includes(id),
+          `"${id}" is not an event`
+        );
+
+        if (patch === null) {
+          eventPatch[id] = FieldValue.delete();
+          continue;
+        }
+
+        assertPlainObject(patch, `events.${id}`);
+        const { startsAt, endsAt } = patch as Record<string, unknown>;
+
+        /*
+         * Both ends are required together. A patch carrying only a new start
+         * would be merged over a stale end, and the pair — not either field —
+         * is what mealsForEvents reads.
+         */
+        const from = parseInstant(startsAt, `events.${id}.startsAt`);
+        const to = parseInstant(endsAt, `events.${id}.endsAt`);
+        assert(
+          Date.parse(to) >= Date.parse(from),
+          `${id} would end before it starts`
+        );
+
+        eventPatch[id] = { startsAt: from, endsAt: to };
+      }
+      if (Object.keys(eventPatch).length > 0) update.events = eventPatch;
+    }
+
+    if (schedule !== undefined) {
+      assertPlainObject(schedule, "schedule");
+      const entries = Object.entries(schedule as Record<string, unknown>);
+      assert(
+        entries.length <= MAX_SCHEDULE_KEYS,
+        `No more than ${MAX_SCHEDULE_KEYS} schedule entries`
+      );
+
+      /*
+       * Schedule ids are NOT validated against a list, unlike event ids. The
+       * ids live in the config literal and Functions is a separate package that
+       * cannot import from ../src — duplicating them here is the seam described
+       * in Core_and_Studio.md, and duplicating one more list to enforce a
+       * constraint that costs nothing to leave open isn't worth it: applyOverlay
+       * maps over the literal's own items, so an id it doesn't recognise is
+       * ignored rather than rendered. The key cap is what stops the document
+       * being used as free storage.
+       */
+      for (const [id, patch] of entries) {
+        assert(id.length > 0 && id.length <= 64, "schedule id is out of range");
+        // These become map keys, so the character set is Firestore's problem as
+        // well as ours: a leading `__` or a stray dot is a write error rather
+        // than a rejected argument, which surfaces as a 500 instead of a
+        // message. Config ids are slugs; hold callers to that.
+        assert(/^[a-z0-9][a-z0-9_-]*$/i.test(id), `"${id}" is not a schedule id`);
+
+        if (patch === null) {
+          schedulePatch[id] = FieldValue.delete();
+          continue;
+        }
+
+        assertPlainObject(patch, `schedule.${id}`);
+        schedulePatch[id] = {
+          startsAt: parseInstant(
+            (patch as Record<string, unknown>).startsAt,
+            `schedule.${id}.startsAt`
+          ),
+        };
+      }
+      if (Object.keys(schedulePatch).length > 0) update.schedule = schedulePatch;
+    }
+
+    if (emergencyContacts !== undefined) {
+      assert(
+        Array.isArray(emergencyContacts),
+        "emergencyContacts must be an array"
+      );
+      const list = emergencyContacts as unknown[];
+      assert(
+        list.length <= MAX_CONTACTS,
+        `No more than ${MAX_CONTACTS} emergency contacts`
+      );
+
+      // Replaced wholesale rather than merged. The dashboard edits the list as
+      // a list — reordering and deletion are ordinary operations on it, and
+      // neither survives a key-by-key merge.
+      update.emergencyContacts = list.map((entry, i) => {
+        assertPlainObject(entry, `emergencyContacts[${i}]`);
+        const contact = entry as Record<string, unknown>;
+        return {
+          id: cleanString(contact.id, 64, `emergencyContacts[${i}].id`),
+          name: cleanString(contact.name, MAX_NAME_LEN, `emergencyContacts[${i}].name`),
+          role: cleanString(contact.role, MAX_NAME_LEN, `emergencyContacts[${i}].role`),
+          phone: cleanString(contact.phone, 32, `emergencyContacts[${i}].phone`),
+        };
+      });
+    }
+
+    await db.collection("config").doc("live").set(update, { merge: true });
+
+    logger.info("wedding live config updated", {
+      uid: request.auth?.uid,
+      sections: Object.keys(update).filter(
+        (k) => k !== "updatedAt" && k !== "updatedBy"
+      ),
+    });
+
+    return { ok: true, updatedAt: update.updatedAt };
+  }
+);
+
+function assertSignedInStaff(rank: number): void {
+  if (rank < RANK.coordinator) {
+    throw new HttpsError(
+      "permission-denied",
+      "You need a staff account to change this."
+    );
+  }
+}
+
+function assertPlainObject(value: unknown, field: string): void {
+  assert(
+    typeof value === "object" && value !== null && !Array.isArray(value),
+    `${field} must be an object`
+  );
+}
