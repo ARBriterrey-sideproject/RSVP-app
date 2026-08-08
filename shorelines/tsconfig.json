@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@wedding/config": ["./src/content/wedding.config.ts"]
     }
   },
   "include": [

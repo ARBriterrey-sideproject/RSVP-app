@@ -1,0 +1,192 @@
+/**
+ * THE SHAPE OF A WEDDING — core, not instance.
+ *
+ * Nothing in this file is a fact about anybody's wedding. It is the contract
+ * that one `WeddingConfig` literal must satisfy, and it is the half of
+ * `content/` that survives being extracted into a shared core package: every
+ * couple's app compiles against these types and supplies its own literal.
+ *
+ * The rule that keeps the split honest: if a value would differ between two
+ * couples, it belongs in the config literal, not here. If it would be identical
+ * for every couple — a Tailwind class lookup, a validation table — it belongs
+ * here.
+ */
+
+export type Tier = "full" | "wedding_only" | "reception_only";
+
+/**
+ * Event ids for THIS instance.
+ *
+ * A union rather than `string` because it buys real safety today — a typo in a
+ * `perEventAttendance` key fails to compile. It is also the one type here that
+ * is genuinely instance-shaped, and the first thing that has to generalise when
+ * core is extracted: at that point this becomes `string`, and the ids get
+ * validated against the config at runtime instead. Left as a union until then
+ * rather than weakened early for a refactor that hasn't happened.
+ */
+export type EventId =
+  | "mehendi"
+  | "haldi"
+  | "sangeet"
+  | "wedding"
+  | "reception"
+  | "speakeasy";
+
+/**
+ * Each event's own colour, as a token name rather than a value.
+ *
+ * Deliberately an enum and not a hex string: Tailwind v4 scans source for whole
+ * class names, so `border-${accent}` can never work. A config supplies the name
+ * of a swatch the theme already defines; it cannot invent a colour. When a
+ * couple wants a different palette, the *values* behind these names change in
+ * the theme's `@theme` block — the names don't.
+ */
+export type EventAccent =
+  | "warmgold"
+  | "palm"
+  | "coral"
+  | "deeptide"
+  | "clay";
+
+export interface WeddingEvent {
+  id: EventId;
+  /** Display name. Translated via next-intl; this is the English fallback. */
+  name: string;
+  /** ISO 8601 with offset. IST = +05:30. */
+  startsAt: string;
+  /**
+   * ISO 8601 end time. The couple gave every ceremony a window ("10 am to 2
+   * pm"), and the Today screen needs the close as much as the open — it's what
+   * decides whether an event is happening *now* rather than merely today.
+   */
+  endsAt: string;
+  venue: string;
+  /**
+   * The venue as screen 1b writes it — "Garden lawn", not "Garden lawn, Morjim
+   * Sands". The landing lists five events in a row and the hotel name repeated
+   * five times is noise; the full string still carries the timeline and maps.
+   */
+  venueShort: string;
+  /** Free-text address used for the Google Maps deep link. */
+  mapsQuery: string;
+  dressCode: string;
+  /**
+   * "Morning", "Sunset", "Night" — the landing's word for when this happens.
+   * Editorial, not derived: 5:15pm on the beach is "Sunset", and no amount of
+   * hour arithmetic gets you that.
+   */
+  daypart: string;
+  /** Which tiers can see this event at all. */
+  tiers: Tier[];
+  accent: EventAccent;
+  /**
+   * A time worth calling out inside the window — the wedding's muhurat. Shown
+   * as a highlighted line on the timeline, not as a separate event.
+   */
+  highlight?: { label: string; at: string };
+  /**
+   * Invitation-only: never shown by tier, only to guests the couple has
+   * individually flagged. `tiers` must stay empty for these or the tier filter
+   * would leak them to everyone.
+   */
+  invitationOnly?: boolean;
+}
+
+/**
+ * A fixed point in the day that isn't an event to RSVP for — meals, mostly.
+ *
+ * The couple's schedule interleaves these with the ceremonies ("lunch at 1 pm"
+ * lands inside the Haldi window), so the timeline has to merge both lists by
+ * time rather than render ceremonies and then meals.
+ *
+ * They carry no tier of their own — which meals a guest sees is derived from
+ * when that guest is actually here. See `mealsForEvents`.
+ */
+export interface ScheduleItem {
+  id: string;
+  name: string;
+  startsAt: string;
+  /** Set where the couple gave one — "Dinner 8 pm during Sangeeth". */
+  note?: string;
+}
+
+/**
+ * Travel facts, split so that no number ever lives inside a sentence.
+ *
+ * This split is the whole reason the type exists. "About 170 km — roughly 3½
+ * hours by road" was a single English string, which meant three translators
+ * copied 170 and 3½ into Hindi, Kannada and Odia prose by hand. Changing the
+ * venue then required editing four files and hoping nobody missed one. The
+ * numbers are config; the sentence around them is a message catalogue with
+ * `{km}` and `{hours}` holes in it.
+ *
+ * `driveHours` is a string, not a number, because "3½" is typography that
+ * `Intl.NumberFormat` will not produce and "3.5 hours by road" reads worse.
+ */
+export interface TravelPoint {
+  /** "Brahmapur (BAM)" — as a guest reads it off a ticket. Stays Latin. */
+  name: string;
+  distanceKm: number;
+}
+
+export interface AirportPoint extends TravelPoint {
+  /** IATA code, shown on its own in tight rows — "Fly into BBI". */
+  code: string;
+  /** Display fraction, not a float. See the note above. */
+  driveHours: string;
+}
+
+export interface LogisticsConfig {
+  airport: AirportPoint;
+  station: TravelPoint;
+  /** Prose the couple writes; no facts embedded. Translatable. */
+  shuttle: { title: string; description: string };
+  stay: { description: string };
+}
+
+/**
+ * Everything that makes one wedding different from another.
+ *
+ * One object rather than a module of named exports, because a module cannot be
+ * passed, swapped, validated or generated. This is the artifact the studio's
+ * intake form produces: fill the form, emit one of these, build an app around
+ * it.
+ */
+export interface WeddingConfig {
+  /**
+   * Bumped when this interface changes in a way existing literals don't satisfy.
+   * Instances built against an older core are migrated forward by version, so a
+   * literal that predates a field can be told apart from one that omits it.
+   */
+  configVersion: 1;
+  /** URL-safe instance id — the studio's key for this couple. */
+  slug: string;
+  /** The app's own name, shown in the tab title and share previews. */
+  appName: string;
+  couple: { partnerA: string; partnerB: string };
+  dates: {
+    firstDay: string;
+    lastDay: string;
+    rsvpDeadline: string;
+    /** IANA zone. Every formatter in `wedding.ts` reads this, never a literal. */
+    timeZone: string;
+  };
+  destination: {
+    label: string;
+    shortLabel: string;
+    /** Used bare in copy — "See you in Gopalpur". */
+    region: string;
+  };
+  logistics: LogisticsConfig;
+  /** Chronological. The landing, timeline and day-picker render it as given. */
+  events: WeddingEvent[];
+  /**
+   * Events no tier can reach, revealed per guest by a flag on their own
+   * document. Kept out of `events` so that a tier filter physically cannot
+   * surface one — see the security note on `eventsForGuest`.
+   */
+  invitationOnlyEvents: WeddingEvent[];
+  /** Meals and other fixed points, merged into the timeline by time. */
+  schedule: ScheduleItem[];
+  party: { softCap: number };
+}

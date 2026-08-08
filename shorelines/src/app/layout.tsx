@@ -9,6 +9,7 @@ import {
 } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
+import { APP_NAME } from "@/content/wedding";
 import { LOCALE_TAGS, isLocale } from "@/i18n/locales";
 import "./globals.css";
 
@@ -63,10 +64,16 @@ const notoOriya = Noto_Sans_Oriya({
  * Generated rather than static so the share preview a guest gets when they
  * forward the link is in their own language — for WhatsApp-first distribution
  * that snippet is often the first thing anyone reads.
+ *
+ * The title is the one part that isn't translated: it's the app's own name, a
+ * proper noun in all four languages, and it comes from the config so a
+ * different couple's build renames every tab without touching a catalogue. It
+ * used to be repeated as `meta.title` in all four files, which is four places
+ * to miss.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
-  return { title: t("title"), description: t("description") };
+  return { title: APP_NAME, description: t("description") };
 }
 
 export const viewport: Viewport = {

@@ -1,38 +1,80 @@
 /**
- * THE ONLY PLACE WEDDING FACTS LIVE.
+ * THE READING SURFACE FOR WEDDING FACTS.
  *
- * Every value marked PLACEHOLDER was invented by the design tool that produced
- * the identity file — it is NOT confirmed by the couple. The written plan says
- * the final date is still open. Do not treat anything below as true until the
- * couple confirms it; do not scatter these values into components.
+ * The facts themselves moved to `wedding.config.ts`; the contract they satisfy
+ * lives in `schema.ts`. This file is the third piece: it derives the named
+ * values and the helpers the app actually consumes, so that nothing outside
+ * `content/` has to know a config object exists.
  *
- * Event dates/times move to Firestore before launch (admins need to edit them
- * without a redeploy). This file is the seed + the local-dev fallback.
+ * Two rules keep the split from rotting:
+ *
+ *   1. Nothing here is a fact. Every literal below is either a lookup table
+ *      that is identical for every couple, or a value computed from the config.
+ *      A hardcoded "Gopalpur" in this file is a bug.
+ *   2. Prose that contains a number or a proper noun is *composed* here from
+ *      config values, never written out. That is what lets a translator receive
+ *      "About {km} km" instead of "About 170 km" — see `LOGISTICS` below.
+ *
+ * When core is extracted into a package, this file goes with it and only
+ * `wedding.config.ts` stays behind in the instance.
  */
 
-export type Tier = "full" | "wedding_only" | "reception_only";
+/*
+ * Imported through the `@wedding/config` alias rather than by relative path,
+ * and that is the whole injection seam.
+ *
+ * There is exactly one config per build — one couple, one domain, one Firebase
+ * project — so it is a build-time constant, not runtime state. A React context
+ * provider would have been machinery for a value that can never change while
+ * the process is alive, and would have pushed the whole object across the RSC
+ * boundary into every client component that reads a couple's name. An alias
+ * costs nothing at runtime and moves in one line: when core becomes a package,
+ * each `apps/<couple>/tsconfig.json` points this specifier at its own literal
+ * and the same core code compiles against it.
+ *
+ * The corollary: never import `./wedding.config` by relative path from
+ * anywhere. That is the one edge the alias exists to keep swappable.
+ */
+import { weddingConfig } from "@wedding/config";
+import type {
+  EventAccent,
+  ScheduleItem,
+  Tier,
+  WeddingConfig,
+  WeddingEvent,
+} from "./schema";
 
-export type EventId =
-  | "mehendi"
-  | "haldi"
-  | "sangeet"
-  | "wedding"
-  | "reception"
-  | "speakeasy";
+export type {
+  EventAccent,
+  EventId,
+  ScheduleItem,
+  Tier,
+  WeddingConfig,
+  WeddingEvent,
+} from "./schema";
 
 /**
- * Each event's own colour. Screen 1c uses it as a 3px stripe down the left of
- * the card; screen 1b uses it as the filled date disc. One token, two lookups
- * below — Tailwind needs whole class names in the source, so the classes can't
- * be built by string concatenation.
+ * The config this build was compiled against.
+ *
+ * Exported as a function rather than the bare object so the eventual runtime
+ * source — a Firestore document the couple edits without a redeploy — can be
+ * swapped in behind it without touching a call site. Today it returns the
+ * literal; that is the whole implementation and deliberately so.
  */
-export type EventAccent =
-  | "warmgold"
-  | "palm"
-  | "coral"
-  | "deeptide"
-  | "clay";
+export function getWeddingConfig(): WeddingConfig {
+  return weddingConfig;
+}
 
+/* -------------------------------------------------------------------------
+ * Core lookup tables — identical for every couple, so they stay in code.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Screen 1c uses the accent as a 3px stripe down the left of the card; screen
+ * 1b uses it as the filled date disc. One token, two lookups — Tailwind needs
+ * whole class names in the source, so the classes can't be built by string
+ * concatenation.
+ */
 export const ACCENT_BORDER: Record<EventAccent, string> = {
   warmgold: "border-warmgold",
   palm: "border-palm",
@@ -49,256 +91,107 @@ export const ACCENT_FILL: Record<EventAccent, string> = {
   clay: "bg-clay",
 };
 
-export interface WeddingEvent {
-  id: EventId;
-  /** Display name. Translated via next-intl; this is the English fallback. */
-  name: string;
-  /** ISO 8601 with offset. IST = +05:30. */
-  startsAt: string;
-  /**
-   * ISO 8601 end time. The couple gave every ceremony a window ("10 am to 2
-   * pm"), and the Today screen needs the close as much as the open — it's what
-   * decides whether an event is happening *now* rather than merely today.
-   */
-  endsAt: string;
-  venue: string;
-  /**
-   * The venue as screen 1b writes it — "Garden lawn", not "Garden lawn, Morjim
-   * Sands". The landing lists five events in a row and the hotel name repeated
-   * five times is noise; the full string still carries the timeline and maps.
-   */
-  venueShort: string;
-  /** Free-text address used for the Google Maps deep link. */
-  mapsQuery: string;
-  dressCode: string;
-  /**
-   * "Morning", "Sunset", "Night" — the landing's word for when this happens.
-   * Editorial, not derived: 5:15pm on the beach is "Sunset", and no amount of
-   * hour arithmetic gets you that.
-   */
-  daypart: string;
-  /** Which tiers can see this event at all. */
-  tiers: Tier[];
-  accent: EventAccent;
-  /**
-   * A time worth calling out inside the window — the wedding's muhurat. Shown
-   * as a highlighted line on the timeline, not as a separate event.
-   */
-  highlight?: { label: string; at: string };
-  /**
-   * Invitation-only: never shown by tier, only to guests the couple has
-   * individually flagged. See SPEAKEASY below — `tiers` must stay empty for
-   * these or the tier filter would leak them to everyone.
-   */
-  invitationOnly?: boolean;
-}
+const ALL_TIERS: Tier[] = ["full", "wedding_only", "reception_only"];
+
+/* -------------------------------------------------------------------------
+ * Derived facts. Every one of these reads the config; none of them restate it.
+ * ---------------------------------------------------------------------- */
+
+export const APP_NAME = weddingConfig.appName;
+export const COUPLE = weddingConfig.couple;
+export const WEDDING_DATES = weddingConfig.dates;
+export const DESTINATION = weddingConfig.destination;
+export const EVENTS: WeddingEvent[] = weddingConfig.events;
+export const SCHEDULE_ITEMS: ScheduleItem[] = weddingConfig.schedule;
+export const PARTY_SIZE_SOFT_CAP = weddingConfig.party.softCap;
 
 /**
- * A fixed point in the day that isn't an event to RSVP for — meals, mostly.
+ * The invitation-only event, kept as a single export because the app has
+ * exactly one and every call site names it.
  *
- * The couple's schedule interleaves these with the ceremonies ("lunch at 1 pm"
- * lands inside the Haldi window), so the timeline has to merge both lists by
- * time rather than render ceremonies and then meals.
- *
- * They carry no tier of their own — which meals a guest sees is derived from
- * when that guest is actually here. See `mealsForEvents`.
+ * SECURITY: this is copy, not an access decision. It reaches a guest only
+ * through `eventsForGuest`, and only when their own Firestore document carries
+ * the flag. Never render it off a URL, a prop default, or anything a link can
+ * carry.
  */
-export interface ScheduleItem {
-  id: string;
-  name: string;
-  startsAt: string;
-  /** Set where the couple gave one — "Dinner 8 pm during Sangeeth". */
-  note?: string;
-}
-
-/** PLACEHOLDER — couple names. "Shubham" matches the repo path; confirm both. */
-export const COUPLE = {
-  partnerA: "Shubham",
-  partnerB: "Amruta",
-} as const;
+export const SPEAKEASY: WeddingEvent = weddingConfig.invitationOnlyEvents[0];
 
 /**
- * CONFIRMED by the couple: 28–30 December 2026, three days.
+ * Travel copy, composed from config rather than written out.
  *
- * The RSVP deadline is still a PLACEHOLDER — 1 December gives four weeks to
- * chase stragglers and settle catering numbers, but nobody has agreed it.
- */
-export const WEDDING_DATES = {
-  firstDay: "2026-12-28",
-  lastDay: "2026-12-30",
-  rsvpDeadline: "2026-12-01",
-  timeZone: "Asia/Kolkata",
-} as const;
-
-/** CONFIRMED by the couple. Gopalpur-on-Sea, in Ganjam district. */
-export const DESTINATION = {
-  label: "Gopalpur, Odisha, India",
-  shortLabel: "Gopalpur · Odisha",
-  /** Used bare in copy — "See you in Gopalpur" on the confirmation screen. */
-  region: "Gopalpur",
-} as const;
-
-/**
- * The logistics shown on step 4, "Getting there".
+ * `note` and `stay.title` used to be hand-written English sentences with the
+ * distances and the town baked in, which meant every translation baked them in
+ * too — four files to edit for one venue change, and no way to tell that three
+ * of them were now wrong. Building them here means the *numbers* have one home
+ * and the *sentence* has four, which is the right way round.
  *
- * The airport and station are real geography — Bhubaneswar (BBI) is the
- * nearest airport at roughly 170km, and Brahmapur is the nearest railhead at
- * roughly 16km, which is why the transport picker offers train as a first-class
- * option rather than an afterthought. The distances below are approximate and
- * the shuttle and room block are PLACEHOLDERS: neither is arranged yet.
+ * The catalogues carry the same sentences with `{km}`, `{hours}` and `{region}`
+ * holes; `TRAVEL_PARAMS` below supplies the fillings. Change a distance in the
+ * config and all four languages follow.
  */
 export const LOGISTICS = {
   airport: {
-    code: "BBI",
-    name: "Bhubaneswar",
-    note: "About 170 km — roughly 3½ hours by road",
+    ...weddingConfig.logistics.airport,
+    note: `About ${weddingConfig.logistics.airport.distanceKm} km — roughly ${weddingConfig.logistics.airport.driveHours} hours by road`,
   },
   station: {
-    name: "Brahmapur (BAM)",
-    note: "About 16 km — the closest railhead to Gopalpur",
+    ...weddingConfig.logistics.station,
+    note: `About ${weddingConfig.logistics.station.distanceKm} km — the closest railhead to ${weddingConfig.destination.region}`,
   },
-  shuttle: {
-    title: "Pickup from airport or station",
-    description: "Tell us your arrival and we'll send a car",
-  },
+  shuttle: weddingConfig.logistics.shuttle,
   stay: {
-    title: "Room block — Gopalpur",
-    description: "Held under your name until 15 December. Sea-facing on request.",
+    title: `Room block — ${weddingConfig.destination.region}`,
+    description: weddingConfig.logistics.stay.description,
   },
-} as const;
-
-const ALL_TIERS: Tier[] = ["full", "wedding_only", "reception_only"];
-
-/**
- * The couple's own schedule, 28–30 December 2026. Times are CONFIRMED.
- *
- * Venue names and dress codes are still PLACEHOLDERS — the couple gave times
- * and ceremonies, not rooms or what to wear. `mapsQuery` points at the town
- * until there's a named property to point at.
- *
- * Tier visibility is the real logic here:
- *   full            → all five ceremonies
- *   wedding_only    → the wedding
- *   reception_only  → the reception
- *
- * Order is chronological and load-bearing — the landing, the timeline and the
- * RSVP day-picker all render this array as given.
- */
-export const EVENTS: WeddingEvent[] = [
-  {
-    id: "mehendi",
-    name: "Mehendi",
-    startsAt: "2026-12-28T19:00:00+05:30",
-    endsAt: "2026-12-28T21:00:00+05:30",
-    venue: "Courtyard",
-    venueShort: "Courtyard",
-    mapsQuery: "Gopalpur-on-Sea, Odisha",
-    dressCode: "Linen & green",
-    daypart: "Evening",
-    tiers: ["full"],
-    accent: "palm",
-  },
-  {
-    id: "haldi",
-    name: "Haldi",
-    startsAt: "2026-12-29T10:00:00+05:30",
-    endsAt: "2026-12-29T14:00:00+05:30",
-    venue: "Garden lawn",
-    venueShort: "Garden lawn",
-    mapsQuery: "Gopalpur-on-Sea, Odisha",
-    dressCode: "Wear yellow · barefoot",
-    daypart: "Morning",
-    tiers: ["full"],
-    accent: "warmgold",
-  },
-  {
-    id: "sangeet",
-    name: "Sangeet",
-    startsAt: "2026-12-29T18:00:00+05:30",
-    endsAt: "2026-12-29T21:00:00+05:30",
-    venue: "Banquet lawn",
-    venueShort: "Banquet lawn",
-    mapsQuery: "Gopalpur-on-Sea, Odisha",
-    dressCode: "Dance-ready",
-    daypart: "Evening",
-    tiers: ["full"],
-    accent: "coral",
-  },
-  {
-    id: "wedding",
-    name: "Wedding",
-    startsAt: "2026-12-30T10:00:00+05:30",
-    endsAt: "2026-12-30T14:00:00+05:30",
-    venue: "Shoreline mandap",
-    venueShort: "Shoreline mandap",
-    mapsQuery: "Gopalpur-on-Sea, Odisha",
-    dressCode: "Formal ivory",
-    daypart: "Morning",
-    tiers: ["full", "wedding_only"],
-    accent: "deeptide",
-    highlight: { label: "Muhurat", at: "2026-12-30T11:28:00+05:30" },
-  },
-  {
-    id: "reception",
-    name: "Reception",
-    startsAt: "2026-12-30T18:30:00+05:30",
-    endsAt: "2026-12-30T21:00:00+05:30",
-    venue: "Terrace",
-    venueShort: "Terrace",
-    mapsQuery: "Gopalpur-on-Sea, Odisha",
-    dressCode: "Formal",
-    daypart: "Evening",
-    tiers: ["full", "reception_only"],
-    accent: "clay",
-  },
-];
-
-/**
- * The couple's private gathering between the public events.
- *
- * Deliberately NOT in EVENTS and deliberately carrying no tier. It is revealed
- * only to guests the couple has individually flagged in the dashboard, so it
- * must never pass through `eventsForTier` — a tier is a link, and links get
- * forwarded. Time and venue are PLACEHOLDERS; the couple hasn't set them.
- *
- * SECURITY: the reveal is enforced in Firestore rules, not here. Treat this
- * object as copy, not as an access decision — never render it without first
- * checking the guest's own `speakeasyInvited` flag.
- */
-export const SPEAKEASY: WeddingEvent = {
-  id: "speakeasy",
-  name: "The Speakeasy",
-  startsAt: "2026-12-29T22:00:00+05:30",
-  endsAt: "2026-12-30T01:00:00+05:30",
-  venue: "Told to you on the night",
-  venueShort: "Told to you on the night",
-  mapsQuery: "Gopalpur-on-Sea, Odisha",
-  dressCode: "Whatever you danced in",
-  daypart: "Late",
-  tiers: [],
-  accent: "deeptide",
-  invitationOnly: true,
 };
 
 /**
- * Meals and other fixed points. Merged with EVENTS by time on the timeline.
+ * The values a translated `wedding.*` string may interpolate, keyed by the
+ * catalogue key that uses them.
  *
- * The 28th's dinner has no separate slot in the couple's schedule — it reads
- * "7 to 9 pm - Mehandi, and Dinner", one thing, so it stays a note on the
- * Mehendi rather than a second line at the same hour.
+ * This is the other half of the fix described on `LOGISTICS`. A translator
+ * receives "लगभग {km} किमी", never "लगभग 170 किमी", and `weddingCopy.pick`
+ * looks the fillings up here by key — so no call site has to know which strings
+ * happen to carry facts, and adding one is an edit in this file plus the four
+ * catalogues.
+ *
+ * Keyed per string rather than as one shared bag because two of them use `{km}`
+ * for different distances; a flat object would quietly hand the station the
+ * airport's number.
+ *
+ * A key absent from here interpolates nothing, which is the common case.
  */
-export const SCHEDULE_ITEMS: ScheduleItem[] = [
-  { id: "breakfast-29", name: "Breakfast", startsAt: "2026-12-29T08:00:00+05:30" },
-  { id: "lunch-29", name: "Lunch", startsAt: "2026-12-29T13:00:00+05:30" },
-  {
-    id: "dinner-29",
-    name: "Dinner",
-    startsAt: "2026-12-29T20:00:00+05:30",
-    note: "Served during the Sangeet",
+export const MESSAGE_PARAMS: Record<
+  string,
+  Record<string, string | number>
+> = {
+  "logistics.airport.note": {
+    km: weddingConfig.logistics.airport.distanceKm,
+    hours: weddingConfig.logistics.airport.driveHours,
+    code: weddingConfig.logistics.airport.code,
+    city: weddingConfig.logistics.airport.name,
   },
-  { id: "breakfast-30", name: "Breakfast", startsAt: "2026-12-30T07:00:00+05:30" },
-  { id: "lunch-30", name: "Lunch", startsAt: "2026-12-30T13:00:00+05:30" },
-];
+  "logistics.station.note": {
+    km: weddingConfig.logistics.station.distanceKm,
+    region: weddingConfig.destination.region,
+    station: weddingConfig.logistics.station.name,
+  },
+  "logistics.stay.title": { region: weddingConfig.destination.region },
+  "transport.airplane.description": {
+    code: weddingConfig.logistics.airport.code,
+    city: weddingConfig.logistics.airport.name,
+    km: weddingConfig.logistics.airport.distanceKm,
+    hours: weddingConfig.logistics.airport.driveHours,
+  },
+  "transport.train.description": {
+    station: weddingConfig.logistics.station.name,
+    km: weddingConfig.logistics.station.distanceKm,
+  },
+};
+
+/* -------------------------------------------------------------------------
+ * Derivations over the schedule.
+ * ---------------------------------------------------------------------- */
 
 /**
  * The meals that fall inside one guest's own stay.
@@ -317,22 +210,23 @@ export const SCHEDULE_ITEMS: ScheduleItem[] = [
  * Pass the events the guest is actually attending where that's known; passing
  * their tier's events answers the more general "what does this invite cover".
  */
-export function mealsForEvents(events: WeddingEvent[]): ScheduleItem[] {
+export function mealsForEvents(
+  events: WeddingEvent[],
+  config: WeddingConfig = weddingConfig
+): ScheduleItem[] {
   if (events.length === 0) return [];
 
   const arrives = Math.min(...events.map((e) => Date.parse(e.startsAt)));
   const leaves = Math.max(...events.map((e) => Date.parse(e.endsAt)));
 
-  return SCHEDULE_ITEMS.filter((item) => {
+  return config.schedule.filter((item) => {
     const at = Date.parse(item.startsAt);
     return at >= arrives && at <= leaves;
   });
 }
 
 export function isTier(value: unknown): value is Tier {
-  return (
-    typeof value === "string" && (ALL_TIERS as string[]).includes(value)
-  );
+  return typeof value === "string" && (ALL_TIERS as string[]).includes(value);
 }
 
 /**
@@ -381,8 +275,11 @@ export function rsvpHref(tier: Tier): string {
   return `/rsvp?tier=${tierCode(tier)}`;
 }
 
-export function eventsForTier(tier: Tier): WeddingEvent[] {
-  return EVENTS.filter((event) => event.tiers.includes(tier));
+export function eventsForTier(
+  tier: Tier,
+  config: WeddingConfig = weddingConfig
+): WeddingEvent[] {
+  return config.events.filter((event) => event.tiers.includes(tier));
 }
 
 /**
@@ -391,19 +288,23 @@ export function eventsForTier(tier: Tier): WeddingEvent[] {
  *
  * Use this anywhere a real guest is on screen; `eventsForTier` alone answers
  * "what does this link carry", which is a different and always-public question.
- * The speakeasy is spliced in chronologically rather than appended, because a
- * schedule that runs 10am, 6pm, 10pm, 10am reads as a bug.
+ * Invitation-only events are spliced in chronologically rather than appended,
+ * because a schedule that runs 10am, 6pm, 10pm, 10am reads as a bug.
  *
  * SECURITY: `speakeasyInvited` must come from the guest's own Firestore
- * document, never from a URL, prop default or anything a link can carry.
+ * document, never from a URL, prop default or anything a link can carry. It is
+ * re-checked inside the callable's transaction — this function is UI only.
  */
 export function eventsForGuest(
   tier: Tier,
-  { speakeasyInvited = false }: { speakeasyInvited?: boolean } = {}
+  {
+    speakeasyInvited = false,
+    config = weddingConfig,
+  }: { speakeasyInvited?: boolean; config?: WeddingConfig } = {}
 ): WeddingEvent[] {
-  const events = eventsForTier(tier);
+  const events = eventsForTier(tier, config);
   if (!speakeasyInvited) return events;
-  return [...events, SPEAKEASY].sort((a, b) =>
+  return [...events, ...config.invitationOnlyEvents].sort((a, b) =>
     a.startsAt.localeCompare(b.startsAt)
   );
 }
@@ -411,6 +312,10 @@ export function eventsForGuest(
 export function mapsUrl(event: WeddingEvent): string {
   return `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
 }
+
+/* -------------------------------------------------------------------------
+ * Dietary and transport — core vocabularies, not instance facts.
+ * ---------------------------------------------------------------------- */
 
 /**
  * Dietary options — veg or non-veg, with the detail captured as free text.
@@ -421,6 +326,10 @@ export function mapsUrl(event: WeddingEvent): string {
  * caterer actually works from. The nuance didn't get dropped — it moved from a
  * fixed list into `dietaryNotes`, where a guest can write "Jain, no root veg"
  * and be understood, rather than picking the nearest of six labels.
+ *
+ * In core rather than config because the callable validates against this exact
+ * list; a couple who wants a third option needs a server change too, so
+ * pretending it is per-instance data would be a lie.
  *
  * Values are stable IDs; labels are translated. `vegetarian` deliberately keeps
  * its old id so RSVPs stored before the change still hydrate.
@@ -471,7 +380,7 @@ export const DIETARY_COPY: Record<
 };
 
 /**
- * How a guest is getting to Gopalpur. Stable ids; labels are translated.
+ * How a guest is getting to the wedding. Stable ids; labels are translated.
  *
  * "self" covers driving, a hired car, a bus — anything the couple doesn't need
  * to meet. It exists so that a guest who needs no pickup can say so in one tap
@@ -485,6 +394,13 @@ export function isTransportMode(value: unknown): value is TransportMode {
   return (TRANSPORT_MODES as readonly string[]).includes(value as string);
 }
 
+/**
+ * English fallbacks for the transport picker, composed from config.
+ *
+ * The descriptions name the airport and the railhead, which are facts — so they
+ * are interpolated here and shipped to translators as `{code}` / `{station}`
+ * holes rather than as finished sentences. See `TRAVEL_PARAMS`.
+ */
 export const TRANSPORT_COPY: Record<
   TransportMode,
   { label: string; description: string; serviceLabel?: string }
@@ -505,12 +421,9 @@ export const TRANSPORT_COPY: Record<
   },
 };
 
-/**
- * Soft cap on party size per submission. The plan flags this as an open item;
- * 15 is a starting guess, not a decision. Enforced server-side in the callable
- * Function — the client value here is only for inline validation feedback.
- */
-export const PARTY_SIZE_SOFT_CAP = 15;
+/* -------------------------------------------------------------------------
+ * Formatters. All of them read the config's time zone — never a literal.
+ * ---------------------------------------------------------------------- */
 
 /**
  * "You can change this until 1 March" in the mockup. Driven off the real
@@ -521,7 +434,7 @@ export function rsvpDeadlineLabel(locale = "en-IN"): string {
     day: "numeric",
     month: "long",
     timeZone: WEDDING_DATES.timeZone,
-  }).format(new Date(`${WEDDING_DATES.rsvpDeadline}T00:00:00+05:30`));
+  }).format(startOfDay(WEDDING_DATES.rsvpDeadline));
 }
 
 /** "1 February 2027" — the landing spells the year out; step 1c doesn't. */
@@ -531,20 +444,20 @@ export function rsvpDeadlineLongLabel(locale = "en-IN"): string {
     month: "long",
     year: "numeric",
     timeZone: WEDDING_DATES.timeZone,
-  }).format(new Date(`${WEDDING_DATES.rsvpDeadline}T00:00:00+05:30`));
+  }).format(startOfDay(WEDDING_DATES.rsvpDeadline));
 }
 
 /**
- * "11–14 March 2027" for the hero. En dash, not a hyphen — it's a range.
+ * "28–30 December 2026" for the hero. En dash, not a hyphen — it's a range.
  *
  * Assumes the celebration doesn't straddle a month or year boundary, which is
- * true of every four-day span the couple is considering. If that changes this
- * needs the month printed on both sides.
+ * true of every span the couple is considering. If that changes this needs the
+ * month printed on both sides.
  */
 export function weddingDateRangeLabel(locale = "en-IN"): string {
   const tz = { timeZone: WEDDING_DATES.timeZone } as const;
-  const first = new Date(`${WEDDING_DATES.firstDay}T00:00:00+05:30`);
-  const last = new Date(`${WEDDING_DATES.lastDay}T00:00:00+05:30`);
+  const first = startOfDay(WEDDING_DATES.firstDay);
+  const last = startOfDay(WEDDING_DATES.lastDay);
 
   const day = new Intl.DateTimeFormat(locale, { day: "numeric", ...tz });
   const monthYear = new Intl.DateTimeFormat(locale, {
@@ -556,7 +469,7 @@ export function weddingDateRangeLabel(locale = "en-IN"): string {
   return `${day.format(first)}–${day.format(last)} ${monthYear.format(last)}`;
 }
 
-/** "11" — the day-of-month in the landing's coloured date disc. */
+/** "28" — the day-of-month in the landing's coloured date disc. */
 export function eventDayNumber(iso: string, locale = "en-IN"): string {
   return new Intl.DateTimeFormat(locale, {
     day: "numeric",
@@ -564,7 +477,7 @@ export function eventDayNumber(iso: string, locale = "en-IN"): string {
   }).format(new Date(iso));
 }
 
-/** "Wed 11 Mar · 10:00 am" — the event card subtitle in screen 1c. */
+/** "Wed 30 Dec · 10:00 am" — the event card subtitle in screen 1c. */
 export function formatEventWhen(iso: string, locale = "en-IN"): string {
   return new Intl.DateTimeFormat(locale, {
     weekday: "short",
@@ -574,4 +487,18 @@ export function formatEventWhen(iso: string, locale = "en-IN"): string {
     minute: "2-digit",
     timeZone: WEDDING_DATES.timeZone,
   }).format(new Date(iso));
+}
+
+/**
+ * Midnight on a bare `YYYY-MM-DD`, in the wedding's own zone.
+ *
+ * The offset used to be written into the string as `+05:30`, which quietly tied
+ * three formatters to India. Asking `Intl` to format the UTC instant of that
+ * date *in* the configured zone gets the same answer for Asia/Kolkata and the
+ * right answer everywhere else — a wedding in a negative-offset zone would
+ * otherwise have printed the day before.
+ */
+function startOfDay(isoDate: string): Date {
+  const noonUtc = new Date(`${isoDate}T12:00:00Z`);
+  return noonUtc;
 }

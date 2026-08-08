@@ -155,7 +155,10 @@ export function StepDone({
 
 /** "28 Dec" from a `YYYY-MM-DD` value, read in the wedding's own timezone. */
 function dayLabel(isoDate: string, locale: string): string {
-  const date = new Date(`${isoDate}T12:00:00+05:30`);
+  // Noon UTC, not midnight: far enough from either boundary that formatting it
+  // in the wedding's zone lands on the day the guest picked, whatever that zone
+  // is. A hardcoded +05:30 here tied the summary to India.
+  const date = new Date(`${isoDate}T12:00:00Z`);
   if (Number.isNaN(date.getTime())) return isoDate;
   return new Intl.DateTimeFormat(locale, {
     day: "numeric",

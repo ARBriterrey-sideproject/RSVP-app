@@ -1,5 +1,6 @@
 import {
   DIETARY_COPY,
+  MESSAGE_PARAMS,
   TRANSPORT_COPY,
   type DietaryOption,
   type ScheduleItem,
@@ -24,12 +25,55 @@ import {
  * absent from all four catalogues, because translating a string the couple
  * hasn't confirmed only means translating it twice.
  */
-export type Lookup = ((key: string) => string) & {
+export type Lookup = ((
+  key: string,
+  values?: Record<string, string | number>
+) => string) & {
   has: (key: string) => boolean;
 };
 
+/**
+ * The fallback rule, plus the fact injection.
+ *
+ * A handful of `wedding.*` strings are sentences with facts in them — "About
+ * {km} km — roughly {hours} hours by road". The catalogues carry the sentence
+ * with the holes; `MESSAGE_PARAMS` carries the fillings, keyed by the same
+ * string key. Looking them up here rather than at the call sites is what keeps
+ * `override(t, "logistics.station.note", …)` reading the same as every other
+ * lookup: no caller has to know which keys happen to interpolate.
+ *
+ * Passing `undefined` for a key with no params is what next-intl expects, so
+ * the common case costs nothing.
+ */
 function pick(t: Lookup, key: string, fallback: string): string {
-  return t.has(key) ? t(key) : fallback;
+  if (!t.has(key)) return fallback;
+  const params = MESSAGE_PARAMS[key];
+  return t(key, params && localiseParams(t, params));
+}
+
+/**
+ * Place names that are themselves translatable, mapped to the key that
+ * translates them.
+ *
+ * `MESSAGE_PARAMS` holds the English config values, which is right for a code
+ * off a boarding pass and wrong for a town: "Gopalpur का सबसे नज़दीकी स्टेशन"
+ * is a worse sentence than the one it replaced. Everything not listed here —
+ * `{station}`, `{code}`, `{km}` — is deliberately left as authored, because a
+ * guest matches those against a ticket.
+ */
+const TRANSLATABLE_PARAMS: Record<string, string> = {
+  region: "destination.region",
+};
+
+function localiseParams(
+  t: Lookup,
+  params: Record<string, string | number>
+): Record<string, string | number> {
+  const out: Record<string, string | number> = { ...params };
+  for (const [name, key] of Object.entries(TRANSLATABLE_PARAMS)) {
+    if (name in out && t.has(key)) out[name] = t(key);
+  }
+  return out;
 }
 
 /**
@@ -121,11 +165,10 @@ export interface TransportCopy extends LogisticsCopy {
 }
 
 /**
- * The English descriptions interpolate `LOGISTICS` (the airport code, the
- * station name), so a translation has to carry those values itself rather than
- * translating a sentence with a hole in it. They're proper nouns a guest reads
- * off a ticket, so they stay Latin inside the translated sentence — see the
- * same call in the landing's travel rows.
+ * The descriptions name the airport and the railhead, so the translated strings
+ * are sentences with `{code}` / `{station}` holes and `pick` supplies the
+ * values. The names themselves stay Latin inside the translated sentence —
+ * they're proper nouns a guest reads off a ticket.
  */
 export function transportCopy(t: Lookup, mode: TransportMode): TransportCopy {
   const fallback = TRANSPORT_COPY[mode];

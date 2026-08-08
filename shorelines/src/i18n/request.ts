@@ -1,4 +1,5 @@
 import { getRequestConfig } from "next-intl/server";
+import { WEDDING_DATES } from "@/content/wedding";
 import { getUserLocale } from "./locale";
 
 /**
@@ -13,10 +14,12 @@ export default getRequestConfig(async () => {
   return {
     locale,
 
-    // Asia/Kolkata everywhere, deliberately. A countdown to the muhurat has to
-    // read the same to a guest in London as to one in Bhubaneswar — it counts
-    // down to a moment in Odisha, not to a local wall-clock time.
-    timeZone: "Asia/Kolkata",
+    // The wedding's own zone everywhere, deliberately — never the viewer's. A
+    // countdown to the muhurat has to read the same to a guest in London as to
+    // one in Bhubaneswar: it counts down to a moment in Odisha, not to a local
+    // wall-clock time. Taken from the config so a wedding somewhere else gets
+    // the same guarantee without an edit here.
+    timeZone: WEDDING_DATES.timeZone,
 
     /**
      * Editing a catalogue does NOT hot-reload — this dynamic import stays
