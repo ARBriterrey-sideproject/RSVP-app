@@ -112,13 +112,20 @@ export function Stepper({
   min = 0,
   max,
   onChange,
-  label,
+  fewerLabel,
+  moreLabel,
 }: {
   value: number;
   min?: number;
   max: number;
   onChange: (next: number) => void;
-  label: string;
+  /**
+   * Both labels arrive whole rather than being built here from a noun. "One
+   * fewer child" needs the noun inflected in Hindi, Kannada and Odia, and this
+   * component has no way to do that — the caller owns the sentence.
+   */
+  fewerLabel: string;
+  moreLabel: string;
 }) {
   return (
     <div className="flex flex-none items-center gap-3">
@@ -126,7 +133,7 @@ export function Stepper({
         type="button"
         onClick={() => onChange(value - 1)}
         disabled={value <= min}
-        aria-label={`One fewer ${label}`}
+        aria-label={fewerLabel}
         className="grid size-[34px] place-items-center rounded-full border border-hairline font-sans text-lg leading-none text-deeptide transition-colors hover:bg-deeptide/8 disabled:opacity-30 disabled:hover:bg-transparent"
       >
         −
@@ -143,7 +150,7 @@ export function Stepper({
         type="button"
         onClick={() => onChange(value + 1)}
         disabled={value >= max}
-        aria-label={`One more ${label}`}
+        aria-label={moreLabel}
         className="grid size-[34px] place-items-center rounded-full bg-deeptide font-sans text-lg leading-none text-sand transition-colors hover:bg-deeptide-deep disabled:opacity-30"
       >
         +

@@ -1,4 +1,11 @@
-import type { ScheduleItem, WeddingEvent } from "@/content/wedding";
+import {
+  DIETARY_COPY,
+  TRANSPORT_COPY,
+  type DietaryOption,
+  type ScheduleItem,
+  type TransportMode,
+  type WeddingEvent,
+} from "@/content/wedding";
 
 /**
  * Wedding facts stay authored in English in `content/wedding.ts`; the message
@@ -90,5 +97,43 @@ export function logisticsCopy(
   return {
     title: pick(t, `logistics.${key}.title`, fallback.title),
     description: pick(t, `logistics.${key}.description`, fallback.description),
+  };
+}
+
+/**
+ * "Vegetarian — no meat, fish or egg".
+ *
+ * These two are the only labels a guest picks *between*, so an untranslated one
+ * is worse than an untranslated heading: it's a choice they can't read. The
+ * fallback still applies, but every catalogue is expected to carry them.
+ */
+export function dietaryCopy(t: Lookup, option: DietaryOption): LogisticsCopy {
+  const fallback = DIETARY_COPY[option];
+  return {
+    title: pick(t, `dietary.${option}.label`, fallback.label),
+    description: pick(t, `dietary.${option}.description`, fallback.description),
+  };
+}
+
+export interface TransportCopy extends LogisticsCopy {
+  /** Absent for "self" — there is no service number for a car. */
+  serviceLabel?: string;
+}
+
+/**
+ * The English descriptions interpolate `LOGISTICS` (the airport code, the
+ * station name), so a translation has to carry those values itself rather than
+ * translating a sentence with a hole in it. They're proper nouns a guest reads
+ * off a ticket, so they stay Latin inside the translated sentence — see the
+ * same call in the landing's travel rows.
+ */
+export function transportCopy(t: Lookup, mode: TransportMode): TransportCopy {
+  const fallback = TRANSPORT_COPY[mode];
+  return {
+    title: pick(t, `transport.${mode}.label`, fallback.label),
+    description: pick(t, `transport.${mode}.description`, fallback.description),
+    serviceLabel: fallback.serviceLabel
+      ? pick(t, `transport.${mode}.serviceLabel`, fallback.serviceLabel)
+      : undefined,
   };
 }

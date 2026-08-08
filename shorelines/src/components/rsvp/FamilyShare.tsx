@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import QRCode from "qrcode";
 import { COUPLE } from "@/content/wedding";
 import { Eyebrow } from "./ui";
@@ -20,6 +21,7 @@ import { Eyebrow } from "./ui";
  * travel plans, no notes, and never an invitation-only event.
  */
 export function FamilyShare({ shareCode }: { shareCode: string }) {
+  const t = useTranslations("rsvp.share");
   const link = useShareLink(shareCode);
   const [copied, setCopied] = useState(false);
 
@@ -36,7 +38,7 @@ export function FamilyShare({ shareCode }: { shareCode: string }) {
 
   return (
     <div className="mt-2.5 rounded-card bg-card p-4 text-left">
-      <Eyebrow className="mb-2.5">Share with your family</Eyebrow>
+      <Eyebrow className="mb-2.5">{t("title")}</Eyebrow>
 
       <div className="flex items-center gap-4">
         {/* Fixed box either way: letting the layout settle when the QR resolves
@@ -48,25 +50,27 @@ export function FamilyShare({ shareCode }: { shareCode: string }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={link.qr}
-              alt={`QR code opening the ${COUPLE.partnerA} and ${COUPLE.partnerB} invitation`}
+              alt={t("qrAlt", {
+                partnerA: COUPLE.partnerA,
+                partnerB: COUPLE.partnerB,
+              })}
               className="size-full"
             />
           ) : (
-            <span className="sr-only">Preparing your code</span>
+            <span className="sr-only">{t("preparing")}</span>
           )}
         </div>
 
         <div className="min-w-0">
           <p className="font-sans text-[13px] leading-[1.55] text-driftwood-soft">
-            Anyone in your party can scan this to see the days, the dress codes
-            and your reply — without sending a second RSVP.
+            {t("body")}
           </p>
           <button
             type="button"
             onClick={copy}
             className="mt-2.5 font-sans text-xs font-medium uppercase tracking-[0.14em] text-coral-ink"
           >
-            {copied ? "Link copied" : "Copy the link"}
+            {copied ? t("copied") : t("copy")}
           </button>
         </div>
       </div>

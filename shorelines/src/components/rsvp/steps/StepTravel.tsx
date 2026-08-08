@@ -1,12 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   LOGISTICS,
-  TRANSPORT_COPY,
   TRANSPORT_MODES,
   WEDDING_DATES,
   type TransportMode,
 } from "@/content/wedding";
+import { logisticsCopy, transportCopy } from "@/i18n/weddingCopy";
 import type { Travel } from "../types";
 import { Card, Eyebrow, RadioDot, StepIntro, StepTitle, Toggle } from "../ui";
 
@@ -28,38 +29,42 @@ export function StepTravel({
   travel: Travel;
   onChange: (next: Travel) => void;
 }) {
+  const t = useTranslations("rsvp.travel");
+  const tWedding = useTranslations("wedding");
+
   const set = <K extends keyof Travel>(key: K, value: Travel[K]) =>
     onChange({ ...travel, [key]: value });
 
   const serviceLabel = travel.mode
-    ? TRANSPORT_COPY[travel.mode].serviceLabel
+    ? transportCopy(tWedding, travel.mode).serviceLabel
     : undefined;
+
+  const shuttle = logisticsCopy(tWedding, "shuttle", LOGISTICS.shuttle);
 
   return (
     <div className="animate-fade-in">
-      <StepTitle>Getting there</StepTitle>
-      <StepIntro>
-        So we know when you land and can send a car. Skip anything you
-        haven&apos;t booked yet.
-      </StepIntro>
+      <StepTitle>{t("title")}</StepTitle>
+      <StepIntro>{t("intro")}</StepIntro>
 
       <div className="mt-[22px] flex gap-2.5">
         <DateCard
-          label="Arriving"
+          label={t("arriving")}
+          fieldLabel={t("arrivingDate")}
           value={travel.arrivalOn}
           onChange={(v) => set("arrivalOn", v)}
         />
         <DateCard
-          label="Leaving"
+          label={t("leaving")}
+          fieldLabel={t("leavingDate")}
           value={travel.departureOn}
           onChange={(v) => set("departureOn", v)}
         />
       </div>
 
-      <Eyebrow className="mt-[22px] mb-2.5">Coming by</Eyebrow>
+      <Eyebrow className="mt-[22px] mb-2.5">{t("comingBy")}</Eyebrow>
       <ul className="flex flex-col gap-2.5">
         {TRANSPORT_MODES.map((mode) => {
-          const copy = TRANSPORT_COPY[mode];
+          const copy = transportCopy(tWedding, mode);
           const selected = travel.mode === mode;
           return (
             <li key={mode}>
@@ -72,7 +77,7 @@ export function StepTravel({
                 <RadioDot selected={selected} />
                 <span>
                   <span className="block font-sans text-[15.5px] font-medium leading-tight text-driftwood">
-                    {copy.label}
+                    {copy.title}
                   </span>
                   <span className="mt-0.5 block font-sans text-xs leading-snug text-driftwood-soft">
                     {copy.description}
@@ -98,6 +103,8 @@ export function StepTravel({
               set("serviceNumber", e.target.value.toUpperCase().slice(0, 24))
             }
             aria-label={serviceLabel}
+            /* Left untranslated: both are literal things printed on a ticket
+               in Latin script, and the guest types them back the same way. */
             placeholder={travel.mode === "train" ? "12703 Falaknuma" : "6E 512"}
             autoComplete="off"
             className="mt-2 w-full bg-transparent font-sans text-base leading-snug text-driftwood outline-none placeholder:text-driftwood-faint"
@@ -111,16 +118,16 @@ export function StepTravel({
         <Card className="mt-2.5 flex items-center gap-3.5">
           <div className="flex-1">
             <div className="font-sans text-[15px] font-medium leading-tight text-driftwood">
-              {LOGISTICS.shuttle.title}
+              {shuttle.title}
             </div>
             <div className="mt-0.5 font-sans text-xs leading-snug text-driftwood-soft">
-              {LOGISTICS.shuttle.description}
+              {shuttle.description}
             </div>
           </div>
           <Toggle
             checked={travel.wantsPickup}
             onChange={(v) => set("wantsPickup", v)}
-            label={LOGISTICS.shuttle.title}
+            label={shuttle.title}
           />
         </Card>
       )}
@@ -148,10 +155,14 @@ export function StepTravel({
  */
 function DateCard({
   label,
+  fieldLabel,
   value,
   onChange,
 }: {
+  /** The eyebrow above the field — "Arriving". */
   label: string;
+  /** What a screen reader announces — "Arrival date", a full noun phrase. */
+  fieldLabel: string;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -164,7 +175,7 @@ function DateCard({
         min={TRAVEL_WINDOW.from}
         max={TRAVEL_WINDOW.to}
         onChange={(e) => onChange(e.target.value)}
-        aria-label={`${label} date`}
+        aria-label={fieldLabel}
         className="mt-2 w-full bg-transparent font-sans text-[15px] leading-snug text-driftwood outline-none [color-scheme:light]"
       />
     </Card>

@@ -199,6 +199,7 @@ async function Curtain() {
  */
 async function Hero() {
   const t = await getTranslations("landing");
+  const tCommon = await getTranslations("common");
   const tWedding = await getTranslations("wedding");
   const tag = await localeTag();
   const label = tWedding.has("destination.label")
@@ -241,7 +242,7 @@ async function Hero() {
           className="animate-rise my-2 font-serif text-xl font-light italic leading-none text-[#f6d9a8]"
           style={{ animationDelay: "3.5s" }}
         >
-          {t("and")}
+          {tCommon("and")}
         </p>
         <p
           className="animate-rise font-display text-[70px] leading-[0.9] text-[#fff9f0] [text-shadow:0_3px_26px_rgba(15,62,64,0.35)]"

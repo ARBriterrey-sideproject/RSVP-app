@@ -1,11 +1,14 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import {
   COUPLE,
   DESTINATION,
-  DIETARY_COPY,
-  TRANSPORT_COPY,
   WEDDING_DATES,
   rsvpDeadlineLabel,
 } from "@/content/wedding";
+import { dietaryCopy, override, transportCopy } from "@/i18n/weddingCopy";
+import { useLocaleTag } from "@/i18n/useLocaleTag";
 import { FamilyShare } from "../FamilyShare";
 import type { PartyMember, Travel } from "../types";
 import { Eyebrow, ScallopEdge } from "../ui";
@@ -40,9 +43,13 @@ export function StepDone({
   shareCode: string | null;
   onEdit: () => void;
 }) {
+  const t = useTranslations("rsvp.done");
+  const tWedding = useTranslations("wedding");
+  const tag = useLocaleTag();
+
   const shared = party.every((m) => m.dietary === party[0].dietary)
-    ? DIETARY_COPY[party[0].dietary].label
-    : "Mixed";
+    ? dietaryCopy(tWedding, party[0].dietary).title
+    : t("mixedMenu");
 
   return (
     <div className="animate-fade-in pt-5 text-center">
@@ -64,7 +71,7 @@ export function StepDone({
               declined ? "text-deeptide-deep" : "text-[rgba(255,249,240,0.85)]"
             }`}
           >
-            {declined ? "Reply received" : "You're on the list"}
+            {declined ? t("bannerDeclined") : t("bannerAccepted")}
           </div>
         </div>
 
@@ -72,55 +79,60 @@ export function StepDone({
       </div>
 
       <h2 className="mt-3.5 font-display text-[40px] leading-[1.05] text-deeptide">
-        {declined ? "We'll miss you" : `See you in ${DESTINATION.region}`}
+        {declined
+          ? t("headingDeclined")
+          : t("headingAccepted", {
+              place: override(tWedding, "destination.region", DESTINATION.region),
+            })}
       </h2>
 
       <p className="mt-2.5 font-sans text-sm leading-[1.7] text-driftwood-soft">
-        {declined ? (
-          <>
-            {COUPLE.partnerA} and {COUPLE.partnerB} will know. If anything
-            changes, come back and say so — nothing is final until{" "}
-            {/* No locale argument: the default en-IN gives "1 February", which
-                is what the party step already says. */}
-            {rsvpDeadlineLabel()}.
-          </>
-        ) : (
-          // The mockup opens with "A confirmation is on its way" — we never ask
-          // for an email, so nothing is on its way. The rest is the design's.
-          <>
-            Your reply is saved. We&apos;ll nudge you the week before with
-            pickup times and dress codes.
-          </>
-        )}
+        {declined
+          ? t("bodyDeclined", {
+              partnerA: COUPLE.partnerA,
+              partnerB: COUPLE.partnerB,
+              date: rsvpDeadlineLabel(tag),
+            })
+          : // The mockup opens with "A confirmation is on its way" — we never
+            // ask for an email, so nothing is on its way. The rest is the
+            // design's.
+            t("bodyAccepted")}
       </p>
 
       <div className="mt-5 rounded-card bg-card p-4 text-left">
-        <Eyebrow className="mb-2.5">Your reply</Eyebrow>
+        <Eyebrow className="mb-2.5">{t("yourReply")}</Eyebrow>
         <SummaryRow
-          label="Events"
-          value={declined ? "Not attending" : `${attendingCount} of ${totalEvents}`}
+          label={t("events")}
+          value={
+            declined
+              ? t("notAttending")
+              : t("nOfM", { n: attendingCount, m: totalEvents })
+          }
         />
         {!declined && (
           <>
             <SummaryRow
-              label="Party"
-              value={`${party.length} ${party.length === 1 ? "guest" : "guests"}`}
+              label={t("partyLabel")}
+              value={t("guestCount", { count: party.length })}
             />
-            <SummaryRow label="Menu" value={shared} />
+            <SummaryRow label={t("menu")} value={shared} />
             {/* Travel is entirely optional, so each row only appears once the
                 guest has actually told us something. A summary that lists
                 "Arriving —" reads like a form they failed to finish. */}
             {travel.arrivalOn && (
-              <SummaryRow label="Arriving" value={dayLabel(travel.arrivalOn)} />
+              <SummaryRow
+                label={t("arriving")}
+                value={dayLabel(travel.arrivalOn, tag)}
+              />
             )}
             {travel.mode && (
               <SummaryRow
-                label="Coming by"
-                value={TRANSPORT_COPY[travel.mode].label}
+                label={t("comingBy")}
+                value={transportCopy(tWedding, travel.mode).title}
               />
             )}
             {travel.wantsPickup && (
-              <SummaryRow label="Pickup" value="Yes, please" />
+              <SummaryRow label={t("pickup")} value={t("pickupYes")} />
             )}
           </>
         )}
@@ -135,17 +147,17 @@ export function StepDone({
         onClick={onEdit}
         className="mt-[22px] font-sans text-xs font-medium uppercase tracking-[0.14em] text-coral-ink"
       >
-        Change my reply
+        {t("changeReply")}
       </button>
     </div>
   );
 }
 
 /** "28 Dec" from a `YYYY-MM-DD` value, read in the wedding's own timezone. */
-function dayLabel(isoDate: string): string {
+function dayLabel(isoDate: string, locale: string): string {
   const date = new Date(`${isoDate}T12:00:00+05:30`);
   if (Number.isNaN(date.getTime())) return isoDate;
-  return new Intl.DateTimeFormat("en-IN", {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     timeZone: WEDDING_DATES.timeZone,

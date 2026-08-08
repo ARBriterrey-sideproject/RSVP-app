@@ -4,7 +4,8 @@
     "change": "Change language"
   },
   "common": {
-    "madeBy": "Made by ARBriterrey"
+    "madeBy": "Made by ARBriterrey",
+    "and": "and"
   },
   "meta": {
     "title": "Shorelines",
@@ -13,7 +14,6 @@
   "wedding": {},
   "landing": {
     "saveTheDate": "Save the date",
-    "and": "and",
     "scroll": "Scroll",
     "lede": "{days, plural, =1 {One evening barefoot on the same stretch of sand.} =2 {Two days barefoot on the same stretch of sand.} =3 {Three days barefoot on the same stretch of sand.} =4 {Four days barefoot on the same stretch of sand.} =5 {Five days barefoot on the same stretch of sand.} other {# days barefoot on the same stretch of sand.}}",
     "blurb": "{count, plural, =1 {One celebration, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — timings, directions, dress code — lives in this app.} =2 {Two celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =3 {Three celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =4 {Four celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =5 {Five celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} other {# celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.}}",
@@ -28,5 +28,134 @@
     "flyInto": "Fly into {code} ({city})",
     "travelNote": "Tell us how you’re arriving when you RSVP and we’ll send a car.",
     "photoPlaceholder": "Photo — couple on the shore"
+  },
+  "rsvp": {
+    "title": "RSVP",
+    "back": "Back",
+    "progress": "RSVP progress",
+    "cta": {
+      "sendCode": "Send code",
+      "verify": "Verify",
+      "next": "Next",
+      "sendRegrets": "Send regrets",
+      "sendRsvp": "Send RSVP",
+      "busy": "One moment…"
+    },
+    "errors": {
+      "badNumber": "Enter a valid mobile number, or include the country code.",
+      "otpSendFailed": "Could not send the code.",
+      "otpMismatch": "That code didn’t match. Check it and try again.",
+      "nameRequired": "Add your name so we know whose reply this is.",
+      "saveFailed": "We couldn’t save that."
+    },
+    "identity": {
+      "title": "Is this you?",
+      "intro": "Your number is how we find your reply again — no passwords, no account to make.",
+      "phoneLabel": "Mobile number",
+      "countryCodeHint": "Outside India? Add your country code, like +44.",
+      "codeTitle": "Check your phone",
+      "codeIntro": "We sent a six-digit code to {phone}. It keeps your reply yours — and lets you come back and change it.",
+      "codeLabel": "Six digit code",
+      "useAnotherNumber": "Use a different number"
+    },
+    "days": {
+      "title": "Which days?",
+      "intro": "Tell us where to save you a seat. Nothing is compulsory — come to what you can.",
+      "byInvitation": "By invitation"
+    },
+    "party": {
+      "title": "Who’s with you?",
+      "intro": "Add everyone travelling under your invitation.",
+      "primaryGuest": "Primary guest",
+      "yourName": "Your full name",
+      "addNames": "Add their names now",
+      "namesLater": "I’ll add names later",
+      "footnote": "Party of {count}. You can change this until {date}.",
+      "adults": {
+        "title": "Adults joining you",
+        "hint": "Names can come later",
+        "fewer": "One fewer adult",
+        "more": "One more adult",
+        "nth": "Adult {n}"
+      },
+      "children": {
+        "title": "Children under 12",
+        "hint": "We’ll arrange a kids’ table",
+        "fewer": "One fewer child",
+        "more": "One more child",
+        "nth": "Child {n}"
+      }
+    },
+    "table": {
+      "title": "At the table",
+      "intro": "{count, plural, =1 {Meals across the evening. Pick what suits your party — the details go below.} other {Meals across all # events. Pick what suits your party — the details go below.}}",
+      "someoneDiffers": "Someone eats differently?",
+      "sameForEveryone": "Same for everyone",
+      "you": "You",
+      "guestN": "Guest {n}",
+      "menuFor": "Menu for {name}",
+      "restrictions": "Dietary restrictions",
+      "restrictionsHint": "Vegan, allergies — anything the kitchen should know"
+    },
+    "travel": {
+      "title": "Getting there",
+      "intro": "So we know when you land and can send a car. Skip anything you haven’t booked yet.",
+      "arriving": "Arriving",
+      "arrivingDate": "Arrival date",
+      "leaving": "Leaving",
+      "leavingDate": "Departure date",
+      "comingBy": "Coming by"
+    },
+    "done": {
+      "bannerAccepted": "You’re on the list",
+      "bannerDeclined": "Reply received",
+      "headingAccepted": "See you in {place}",
+      "headingDeclined": "We’ll miss you",
+      "bodyAccepted": "Your reply is saved. We’ll nudge you the week before with pickup times and dress codes.",
+      "bodyDeclined": "{partnerA} and {partnerB} will know. If anything changes, come back and say so — nothing is final until {date}.",
+      "yourReply": "Your reply",
+      "events": "Events",
+      "notAttending": "Not attending",
+      "nOfM": "{n} of {m}",
+      "partyLabel": "Party",
+      "guestCount": "{count, plural, =1 {1 guest} other {# guests}}",
+      "menu": "Menu",
+      "mixedMenu": "Mixed",
+      "arriving": "Arriving",
+      "comingBy": "Coming by",
+      "pickup": "Pickup",
+      "pickupYes": "Yes, please",
+      "changeReply": "Change my reply"
+    },
+    "share": {
+      "title": "Share with your family",
+      "body": "Anyone in your party can scan this to see the days, the dress codes and your reply — without sending a second RSVP.",
+      "copy": "Copy the link",
+      "copied": "Link copied",
+      "preparing": "Preparing your code",
+      "qrAlt": "QR code opening the {partnerA} and {partnerB} invitation"
+    }
+  },
+  "shared": {
+    "loading": "Opening the invitation…",
+    "missingTitle": "We can’t find that",
+    "missingBody": "This code doesn’t match an invitation. Ask whoever shared it to send it again — or open your own invite and reply there.",
+    "goToInvitation": "Go to the invitation",
+    "eyebrow": "You’re coming with us",
+    "repliedByHost": "<strong>{name}</strong> has already replied for {count, plural, =1 {you} other {your party}}.",
+    "repliedAnonymous": "Your party’s reply is already in.",
+    "nothingToFill": "There’s nothing for you to fill in — this page is just so you have the details.",
+    "replyingFor": "Replying for {names}{extra, plural, =0 {} other { and # more}}.",
+    "theDays": "The days",
+    "yourDays": "Your days",
+    "going": "Going",
+    "notGoing": "Not going",
+    "meals": "Meals",
+    "gettingThere": "Getting there",
+    "trainTo": "Train to {station}",
+    "flyInto": "Fly into {code} ({city})",
+    "openInMaps": "Open in Google Maps",
+    "askHost": "Travelling separately, or need your own seat counted? Ask {name} to add you to the reply.",
+    "askWhoeverShared": "Travelling separately, or need your own seat counted? Ask whoever shared this to add you to the reply."
   }
 }

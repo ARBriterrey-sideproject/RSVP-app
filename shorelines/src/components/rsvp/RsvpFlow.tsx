@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { onAuthStateChanged, type ConfirmationResult } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -25,6 +26,8 @@ import {
   type Screen,
   type Travel,
 } from "./types";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { override } from "@/i18n/weddingCopy";
 import { StepDays } from "./steps/StepDays";
 import { StepDone } from "./steps/StepDone";
 import { StepIdentity } from "./steps/StepIdentity";
@@ -43,6 +46,11 @@ const RECAPTCHA_CONTAINER_ID = "shorelines-recaptcha";
  * clear of the home indicator — instead of at the end of the document.
  */
 export function RsvpFlow({ tier }: { tier: Tier }) {
+  const t = useTranslations("rsvp");
+  const tCommon = useTranslations("common");
+  const tWedding = useTranslations("wedding");
+  const locale = useLocale();
+
   // The tier on a guest's stored RSVP outranks the link they arrived on. The
   // server already refuses to change a stored tier, so without this a guest
   // with a full invite who opens someone else's reception-only link would be
@@ -148,7 +156,9 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
         // Sent only so the server can set it on FIRST creation. On any later
         // submission the server ignores this and keeps the stored tier.
         tier: effectiveTier,
-        language: "en",
+        // The language they actually replied in, so the couple can send this
+        // family a WhatsApp message they can read.
+        language: locale,
         party: party.map(({ name, ageGroup, dietary }) => ({
           name: name.trim(),
           ageGroup,
@@ -162,15 +172,18 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
       if (response.data?.shareCode) setShareCode(response.data.shareCode);
       setScreen("done");
     } catch (err) {
+      // The Firebase message is English and untranslatable, but it's the only
+      // thing that tells the couple what actually failed when a guest reads it
+      // out over the phone. Keep it, framed by a sentence they can read.
       setError(
         err instanceof Error
-          ? `We couldn't save that: ${err.message}`
-          : "We couldn't save that."
+          ? `${t("errors.saveFailed")} ${err.message}`
+          : t("errors.saveFailed")
       );
     } finally {
       setBusy(false);
     }
-  }, [attending, effectiveTier, notes, party, travel]);
+  }, [attending, effectiveTier, locale, notes, party, t, travel]);
 
   const advance = useCallback(async () => {
     setError(null);
@@ -179,7 +192,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
     if (screen === "you" && !confirmation) {
       const e164 = toE164(phone);
       if (!e164) {
-        setError("Enter a valid mobile number, or include the country code.");
+        setError(t("errors.badNumber"));
         return;
       }
       setBusy(true);
@@ -188,8 +201,8 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
       } catch (err) {
         setError(
           err instanceof Error
-            ? `Could not send the code: ${err.message}`
-            : "Could not send the code."
+            ? `${t("errors.otpSendFailed")} ${err.message}`
+            : t("errors.otpSendFailed")
         );
       } finally {
         setBusy(false);
@@ -203,7 +216,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
         await confirmation!.confirm(code.trim());
         setScreen("days");
       } catch {
-        setError("That code didn't match. Check it and try again.");
+        setError(t("errors.otpMismatch"));
       } finally {
         setBusy(false);
       }
@@ -221,7 +234,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
 
     if (screen === "party") {
       if (!party[0].name.trim()) {
-        setError("Add your name so we know whose reply this is.");
+        setError(t("errors.nameRequired"));
         return;
       }
       setScreen("table");
@@ -234,7 +247,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
     }
 
     if (screen === "travel") await submit();
-  }, [code, confirmation, declining, party, phone, screen, submit]);
+  }, [code, confirmation, declining, party, phone, screen, submit, t]);
 
   const back = useCallback(() => {
     setError(null);
@@ -252,10 +265,10 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
   const inFlow = stepIndex >= 0;
 
   const ctaLabel = (() => {
-    if (screen === "you") return confirmation ? "Verify" : "Send code";
-    if (screen === "days") return declining ? "Send regrets" : "Next";
-    if (screen === "travel") return "Send RSVP";
-    return "Next";
+    if (screen === "you") return t(confirmation ? "cta.verify" : "cta.sendCode");
+    if (screen === "days") return t(declining ? "cta.sendRegrets" : "cta.next");
+    if (screen === "travel") return t("cta.sendRsvp");
+    return t("cta.next");
   })();
 
   return (
@@ -266,7 +279,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
             <button
               type="button"
               onClick={back}
-              aria-label="Back"
+              aria-label={t("back")}
               className={`w-8 text-left font-sans text-[22px] leading-none text-driftwood-soft ${
                 canGoBack ? "" : "pointer-events-none opacity-0"
               }`}
@@ -275,7 +288,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
             </button>
 
             <span className="font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-              RSVP
+              {t("title")}
             </span>
 
             <span className="w-8 text-right font-sans text-xs tabular-nums text-driftwood-faint">
@@ -289,7 +302,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
             aria-valuenow={Math.max(stepIndex + 1, 0)}
             aria-valuemin={0}
             aria-valuemax={STEPS.length}
-            aria-label="RSVP progress"
+            aria-label={t("progress")}
           >
             {STEPS.map((step, i) => (
               <span
@@ -309,9 +322,19 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pb-5">
         {screen === "you" && (
           <>
+            {/* The switcher lives only on the identity screen. A guest who
+                lands straight on /rsvp needs it before they read anything;
+                past that point they've already chosen, and a language control
+                beside the form fields is one more thing to mis-tap. */}
+            <LanguageSwitcher className="justify-center pb-5" />
+
             <div className="pb-6 text-center">
               <p className="font-sans text-[10px] uppercase tracking-[0.28em] text-driftwood-faint">
-                {DESTINATION.shortLabel}
+                {override(
+                  tWedding,
+                  "destination.shortLabel",
+                  DESTINATION.shortLabel
+                )}
               </p>
               <p className="mt-2 font-display text-[34px] leading-none text-deeptide">
                 {COUPLE.partnerA} &amp; {COUPLE.partnerB}
@@ -398,7 +421,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
 
         {screen === "you" && (
           <p className="pt-8 text-center font-sans text-[11px] tracking-wide text-driftwood-faint">
-            Made by ARBriterrey
+            {tCommon("madeBy")}
           </p>
         )}
       </div>
@@ -411,7 +434,7 @@ export function RsvpFlow({ tier }: { tier: Tier }) {
             disabled={busy}
             className="w-full rounded-pill bg-coral py-4 font-sans text-[15px] font-medium leading-none tracking-[0.03em] text-foam shadow-[0_8px_22px_rgba(226,138,118,0.38)] transition-colors hover:bg-coral-deep disabled:opacity-60"
           >
-            {busy ? "One moment…" : ctaLabel}
+            {busy ? t("cta.busy") : ctaLabel}
           </button>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { doc, getDoc } from "firebase/firestore";
 import {
   ACCENT_FILL,
@@ -20,6 +21,8 @@ import {
   type WeddingEvent,
 } from "@/content/wedding";
 import { getFirebase } from "@/lib/firebase/client";
+import { eventCopy, override, scheduleCopy } from "@/i18n/weddingCopy";
+import { useLocaleTag } from "@/i18n/useLocaleTag";
 import { ScallopEdge } from "@/components/rsvp/ui";
 
 /**
@@ -37,13 +40,17 @@ import { ScallopEdge } from "@/components/rsvp/ui";
  * and the code being unguessable is what makes that safe.
  */
 export function SharedInvite({ shareCode }: { shareCode: string }) {
+  const t = useTranslations("shared");
+  const tWedding = useTranslations("wedding");
+  const tCommon = useTranslations("common");
+  const tag = useLocaleTag();
   const invite = useInvite(shareCode);
 
   if (invite === "loading") {
     return (
       <Frame>
         <p className="py-20 text-center font-sans text-sm text-driftwood-soft">
-          Opening the invitation…
+          {t("loading")}
         </p>
       </Frame>
     );
@@ -54,17 +61,16 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
       <Frame>
         <div className="px-6 py-20 text-center">
           <h1 className="font-display text-[38px] leading-none text-deeptide">
-            We can&apos;t find that
+            {t("missingTitle")}
           </h1>
           <p className="mt-3 font-sans text-sm leading-[1.7] text-driftwood-soft">
-            This code doesn&apos;t match an invitation. Ask whoever shared it to
-            send it again — or open your own invite and reply there.
+            {t("missingBody")}
           </p>
           <Link
             href="/"
             className="mt-6 inline-block rounded-pill border border-deeptide/50 px-6 py-3 font-sans text-[14.5px] font-medium leading-none text-deeptide"
           >
-            Go to the invitation
+            {t("goToInvitation")}
           </Link>
         </div>
       </Frame>
@@ -83,7 +89,7 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
     <Frame>
       <header className="relative bg-[linear-gradient(170deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] px-6 pt-12 pb-14 text-center">
         <p className="font-sans text-[9.5px] font-medium uppercase tracking-[0.42em] text-[rgba(251,246,238,0.8)]">
-          You&apos;re coming with us
+          {t("eyebrow")}
         </p>
         {/* Stacked, like the landing hero. Side by side, a script face at this
             size runs off a 360px phone before the second name even starts. */}
@@ -91,16 +97,16 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
           {COUPLE.partnerA}
         </p>
         <p className="my-1 font-serif text-base font-light italic leading-none text-[#f6d9a8]">
-          and
+          {tCommon("and")}
         </p>
         <p className="font-display text-[46px] leading-[0.95] text-[#fff9f0] [text-shadow:0_3px_26px_rgba(15,62,64,0.35)]">
           {COUPLE.partnerB}
         </p>
         <p className="mt-4 font-sans text-[12px] uppercase leading-[1.6] tracking-[0.2em] text-[#fff9f0]">
-          {weddingDateRangeLabel()}
+          {weddingDateRangeLabel(tag)}
         </p>
         <p className="mt-1 font-serif text-[14px] font-light leading-[1.5] tracking-[0.06em] text-[rgba(255,249,240,0.9)]">
-          {DESTINATION.label}
+          {override(tWedding, "destination.label", DESTINATION.label)}
         </p>
 
         <ScallopEdge className="text-sand" />
@@ -109,28 +115,31 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
       <section className="px-6 pt-7">
         <div className="rounded-card bg-card p-4">
           <p className="font-sans text-[13.5px] leading-[1.6] text-driftwood">
-            {host ? (
-              <>
-                {/* Keyed off the party size, not how many names were typed —
-                    unnamed seats are still people this reply covers. */}
-                <span className="font-medium">{host}</span> has already replied
-                for {invite.partySize > 1 ? "your party" : "you"}.
-              </>
-            ) : (
-              <>Your party&apos;s reply is already in.</>
-            )}{" "}
-            <span className="text-driftwood-soft">
-              There&apos;s nothing for you to fill in — this page is just so you
-              have the details.
-            </span>
+            {host
+              ? /* Keyed off the party size, not how many names were typed —
+                   unnamed seats are still people this reply covers. The name
+                   is emphasised through rich text so the translator keeps
+                   control of where in the sentence it lands. */
+                t.rich("repliedByHost", {
+                  name: host,
+                  count: invite.partySize,
+                  strong: (chunks) => (
+                    <span className="font-medium">{chunks}</span>
+                  ),
+                })
+              : t("repliedAnonymous")}{" "}
+            <span className="text-driftwood-soft">{t("nothingToFill")}</span>
           </p>
 
           {named.length > 0 && (
             <p className="mt-2.5 font-sans text-xs leading-[1.6] text-driftwood-soft">
-              Replying for {listNames(named.map((m) => m.name.trim()))}
-              {named.length < invite.partySize &&
-                ` and ${invite.partySize - named.length} more`}
-              .
+              {t("replyingFor", {
+                names: listNames(
+                  named.map((m) => m.name.trim()),
+                  tag
+                ),
+                extra: invite.partySize - named.length,
+              })}
             </p>
           )}
         </div>
@@ -138,7 +147,7 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
 
       <section className="px-6 pt-7">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-          {attending.length === events.length ? "The days" : "Your days"}
+          {attending.length === events.length ? t("theDays") : t("yourDays")}
         </h2>
 
         <ul className="flex flex-col gap-2.5">
@@ -156,7 +165,7 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
       {meals.length > 0 && (
         <section className="px-6 pt-7">
           <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-            Meals
+            {t("meals")}
           </h2>
           <ul className="flex flex-col gap-2">
             {meals.map((item) => (
@@ -170,17 +179,30 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
 
       <section className="px-6 pt-7 pb-12">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-          Getting there
+          {t("gettingThere")}
         </h2>
 
+        {/* Station and airport names stay Latin, same as the landing: a guest
+            matches them against a ticket or a signboard. */}
         <div className="flex flex-col gap-2.5">
           <InfoRow
-            title={`Train to ${LOGISTICS.station.name}`}
-            description={LOGISTICS.station.note}
+            title={t("trainTo", { station: LOGISTICS.station.name })}
+            description={override(
+              tWedding,
+              "logistics.station.note",
+              LOGISTICS.station.note
+            )}
           />
           <InfoRow
-            title={`Fly into ${LOGISTICS.airport.code} (${LOGISTICS.airport.name})`}
-            description={LOGISTICS.airport.note}
+            title={t("flyInto", {
+              code: LOGISTICS.airport.code,
+              city: LOGISTICS.airport.name,
+            })}
+            description={override(
+              tWedding,
+              "logistics.airport.note",
+              LOGISTICS.airport.note
+            )}
           />
         </div>
 
@@ -191,17 +213,18 @@ export function SharedInvite({ shareCode }: { shareCode: string }) {
             rel="noreferrer"
             className="mt-2.5 block rounded-pill border border-deeptide/50 py-[15px] text-center font-sans text-[14.5px] font-medium leading-none text-deeptide transition-colors hover:bg-deeptide/7"
           >
-            Open in Google Maps
+            {t("openInMaps")}
           </a>
         )}
 
         <p className="mt-6 text-center font-sans text-[11.5px] leading-[1.6] text-driftwood-faint">
-          Travelling separately, or need your own seat counted? Ask{" "}
-          {host ?? "whoever shared this"} to add you to the reply.
+          {host
+            ? t("askHost", { name: host })
+            : t("askWhoeverShared")}
         </p>
 
         <p className="mt-6 text-center font-sans text-[11px] tracking-wide text-driftwood-faint">
-          Made by ARBriterrey
+          {tCommon("madeBy")}
         </p>
       </section>
     </Frame>
@@ -217,6 +240,11 @@ function Frame({ children }: { children: React.ReactNode }) {
 }
 
 function DayCard({ event, coming }: { event: WeddingEvent; coming: boolean }) {
+  const t = useTranslations("shared");
+  const tWedding = useTranslations("wedding");
+  const tag = useLocaleTag();
+  const copy = eventCopy(tWedding, event);
+
   return (
     <div
       className={`flex items-center gap-3.5 rounded-card bg-card px-4 py-3.5 ${
@@ -232,37 +260,41 @@ function DayCard({ event, coming }: { event: WeddingEvent; coming: boolean }) {
       </span>
       <span className="flex-1">
         <span className="block font-display text-[26px] leading-none text-driftwood">
-          {event.name}
+          {copy.name}
         </span>
         <span className="mt-1 block font-sans text-xs leading-[1.4] text-driftwood-soft">
-          {formatEventWhen(event.startsAt)} · {event.venueShort} ·{" "}
-          {event.dressCode}
+          {formatEventWhen(event.startsAt, tag)} · {copy.venueShort} ·{" "}
+          {copy.dressCode}
         </span>
       </span>
       {/* Not a control — a record of what was already answered. Anyone who
           wants it changed has to go back to the person who replied. */}
       <span className="font-sans text-[9px] font-medium uppercase tracking-[0.16em] text-driftwood-faint">
-        {coming ? "Going" : "Not going"}
+        {coming ? t("going") : t("notGoing")}
       </span>
     </div>
   );
 }
 
 function MealRow({ item }: { item: ScheduleItem }) {
+  const tWedding = useTranslations("wedding");
+  const tag = useLocaleTag();
+  const copy = scheduleCopy(tWedding, item);
+
   return (
     <div className="flex items-baseline gap-3 rounded-card bg-card px-4 py-2.5">
       <span className="flex-1 font-sans text-[14px] leading-tight text-driftwood">
-        {item.name}
+        {copy.name}
         {/* Its own line: inline, "Served during the Sangeet" wraps under the
             time column and collides with it on a narrow phone. */}
-        {item.note && (
+        {copy.note && (
           <span className="mt-0.5 block font-sans text-[11px] leading-snug text-driftwood-faint">
-            {item.note}
+            {copy.note}
           </span>
         )}
       </span>
       <span className="flex-none font-sans text-xs tabular-nums text-driftwood-soft">
-        {formatEventWhen(item.startsAt)}
+        {formatEventWhen(item.startsAt, tag)}
       </span>
     </div>
   );
@@ -357,8 +389,18 @@ function useInvite(shareCode: string): Invite | "loading" | "missing" {
   return state;
 }
 
-/** "Asha", "Asha and Ravi", "Asha, Ravi and Meera". */
-function listNames(names: string[]): string {
+/**
+ * "Asha", "Asha and Ravi", "Asha, Ravi and Meera".
+ *
+ * `Intl.ListFormat` rather than a hand-joined string: the conjunction and the
+ * separators differ by language (Hindi puts "और" where Odia puts "ଏବଂ"), and
+ * this is the one place a translated catalogue can't reach — the words sit
+ * between values, not around them.
+ */
+function listNames(names: string[], locale: string): string {
   if (names.length <= 1) return names[0] ?? "";
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return new Intl.ListFormat(locale, {
+    style: "long",
+    type: "conjunction",
+  }).format(names);
 }

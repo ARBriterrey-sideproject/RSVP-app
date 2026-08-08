@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { toE164 } from "@/lib/firebase/auth";
 import { Eyebrow, StepIntro, StepTitle, TextField } from "../ui";
 
@@ -24,18 +27,17 @@ export function StepIdentity({
   awaitingCode: boolean;
   onUseAnotherNumber: () => void;
 }) {
+  const t = useTranslations("rsvp.identity");
+
   if (awaitingCode) {
     return (
       <div className="animate-fade-in">
-        <StepTitle>Check your phone</StepTitle>
-        <StepIntro>
-          We sent a six-digit code to {toE164(phone) ?? phone}. It keeps your
-          reply yours — and lets you come back and change it.
-        </StepIntro>
+        <StepTitle>{t("codeTitle")}</StepTitle>
+        <StepIntro>{t("codeIntro", { phone: toE164(phone) ?? phone })}</StepIntro>
 
         <div className="mt-[22px]">
           <TextField
-            label="Six digit code"
+            label={t("codeLabel")}
             type="text"
             inputMode="numeric"
             autoComplete="one-time-code"
@@ -51,7 +53,7 @@ export function StepIdentity({
             onClick={onUseAnotherNumber}
             className="mt-4 w-full font-sans text-xs font-medium uppercase tracking-[0.14em] text-coral-ink"
           >
-            Use a different number
+            {t("useAnotherNumber")}
           </button>
         </div>
       </div>
@@ -60,15 +62,12 @@ export function StepIdentity({
 
   return (
     <div className="animate-fade-in">
-      <StepTitle>Is this you?</StepTitle>
-      <StepIntro>
-        Your number is how we find your reply again — no passwords, no account
-        to make.
-      </StepIntro>
+      <StepTitle>{t("title")}</StepTitle>
+      <StepIntro>{t("intro")}</StepIntro>
 
       <div className="mt-[22px]">
         <TextField
-          label="Mobile number"
+          label={t("phoneLabel")}
           type="tel"
           inputMode="tel"
           autoComplete="tel"
@@ -77,7 +76,7 @@ export function StepIdentity({
           placeholder="98765 43210"
         />
         <Eyebrow className="mt-3 px-1 normal-case tracking-[0.04em]">
-          Outside India? Add your country code, like +44.
+          {t("countryCodeHint")}
         </Eyebrow>
       </div>
     </div>

@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import {
-  DIETARY_COPY,
-  DIETARY_OPTIONS,
-  type DietaryOption,
-} from "@/content/wedding";
+import { useTranslations } from "next-intl";
+import { DIETARY_OPTIONS, type DietaryOption } from "@/content/wedding";
+import { dietaryCopy } from "@/i18n/weddingCopy";
 import type { PartyMember } from "../types";
 import { Eyebrow, RadioDot, StepIntro, StepTitle } from "../ui";
 
@@ -38,6 +36,8 @@ export function StepTable({
   notes: string;
   onNotesChange: (value: string) => void;
 }) {
+  const t = useTranslations("rsvp.table");
+  const tWedding = useTranslations("wedding");
   const [showPerPerson, setShowPerPerson] = useState(false);
 
   // Only meaningful when the whole party agrees; otherwise no row is filled in
@@ -48,16 +48,14 @@ export function StepTable({
 
   return (
     <div className="animate-fade-in">
-      <StepTitle>At the table</StepTitle>
-      <StepIntro>
-        Meals across{" "}
-        {eventCount === 1 ? "the evening" : `all ${eventCount} events`}. Pick
-        what suits your party — the details go below.
-      </StepIntro>
+      <StepTitle>{t("title")}</StepTitle>
+      {/* One event is "the evening", not "all 1 events" — the plural carries
+          that case explicitly rather than leaving a count in the sentence. */}
+      <StepIntro>{t("intro", { count: eventCount })}</StepIntro>
 
       <ul className="mt-[22px] flex flex-col gap-2.5">
         {DIETARY_OPTIONS.map((option) => {
-          const copy = DIETARY_COPY[option];
+          const copy = dietaryCopy(tWedding, option);
           return (
             <li key={option}>
               <button
@@ -69,7 +67,7 @@ export function StepTable({
                 <RadioDot selected={shared === option} />
                 <span>
                   <span className="block font-sans text-[15.5px] font-medium leading-tight text-driftwood">
-                    {copy.label}
+                    {copy.title}
                   </span>
                   <span className="mt-0.5 block font-sans text-xs leading-snug text-driftwood-soft">
                     {copy.description}
@@ -89,7 +87,7 @@ export function StepTable({
             aria-expanded={showPerPerson}
             className="font-sans text-xs font-medium uppercase tracking-[0.14em] text-coral-ink"
           >
-            {showPerPerson ? "Same for everyone" : "Someone eats differently?"}
+            {showPerPerson ? t("sameForEveryone") : t("someoneDiffers")}
           </button>
 
           {showPerPerson && (
@@ -101,7 +99,7 @@ export function StepTable({
                 >
                   <span className="flex-1 truncate font-sans text-sm text-driftwood">
                     {member.name.trim() ||
-                      (i === 0 ? "You" : `Guest ${i + 1}`)}
+                      (i === 0 ? t("you") : t("guestN", { n: i + 1 }))}
                   </span>
                   <select
                     value={member.dietary}
@@ -111,12 +109,14 @@ export function StepTable({
                         e.target.value as DietaryOption
                       )
                     }
-                    aria-label={`Menu for ${member.name.trim() || `guest ${i + 1}`}`}
+                    aria-label={t("menuFor", {
+                      name: member.name.trim() || t("guestN", { n: i + 1 }),
+                    })}
                     className="min-w-0 flex-none rounded-pill bg-white px-3 py-1.5 font-sans text-xs text-driftwood outline-none ring-1 ring-hairline focus:ring-deeptide"
                   >
                     {DIETARY_OPTIONS.map((option) => (
                       <option key={option} value={option}>
-                        {DIETARY_COPY[option].label}
+                        {dietaryCopy(tWedding, option).title}
                       </option>
                     ))}
                   </select>
@@ -134,13 +134,13 @@ export function StepTable({
         rather than being unsupported.
       */}
       <div className="mt-[18px] rounded-card border border-dashed border-hairline-dashed bg-white p-4">
-        <Eyebrow>Dietary restrictions</Eyebrow>
+        <Eyebrow>{t("restrictions")}</Eyebrow>
         <textarea
           value={notes}
           onChange={(e) => onNotesChange(e.target.value.slice(0, MAX_NOTE_LEN))}
           rows={3}
-          aria-label="Dietary restrictions"
-          placeholder="Vegan, allergies — anything the kitchen should know"
+          aria-label={t("restrictions")}
+          placeholder={t("restrictionsHint")}
           className="mt-2.5 w-full resize-none bg-transparent font-sans text-sm leading-[1.5] text-driftwood outline-none placeholder:text-driftwood-faint"
         />
       </div>
