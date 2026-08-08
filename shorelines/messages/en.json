@@ -1,0 +1,32 @@
+{
+  "language": {
+    "label": "Language",
+    "change": "Change language"
+  },
+  "common": {
+    "madeBy": "Made by ARBriterrey"
+  },
+  "meta": {
+    "title": "Shorelines",
+    "description": "Barefoot on the same stretch of sand."
+  },
+  "wedding": {},
+  "landing": {
+    "saveTheDate": "Save the date",
+    "and": "and",
+    "scroll": "Scroll",
+    "lede": "{days, plural, =1 {One evening barefoot on the same stretch of sand.} =2 {Two days barefoot on the same stretch of sand.} =3 {Three days barefoot on the same stretch of sand.} =4 {Four days barefoot on the same stretch of sand.} =5 {Five days barefoot on the same stretch of sand.} other {# days barefoot on the same stretch of sand.}}",
+    "blurb": "{count, plural, =1 {One celebration, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — timings, directions, dress code — lives in this app.} =2 {Two celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =3 {Three celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =4 {Four celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} =5 {Five celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.} other {# celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.}}",
+    "daysHeading": "{days, plural, =1 {The day} =2 {The two days} =3 {The three days} =4 {The four days} =5 {The five days} other {The # days}}",
+    "willYouBeWithUs": "Will you be with us?",
+    "replyBy": "Kindly reply by {date}",
+    "ctaRsvp": "RSVP for your family",
+    "ctaTravel": "Travel & stay details",
+    "signOff": "see you by the water",
+    "travelHeading": "Travel & stay",
+    "trainTo": "Train to {station}",
+    "flyInto": "Fly into {code} ({city})",
+    "travelNote": "Tell us how you’re arriving when you RSVP and we’ll send a car.",
+    "photoPlaceholder": "Photo — couple on the shore"
+  }
+}

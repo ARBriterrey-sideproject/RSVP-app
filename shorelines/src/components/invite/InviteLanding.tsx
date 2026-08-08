@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 import {
   ACCENT_FILL,
   COUPLE,
@@ -13,6 +14,9 @@ import {
   type Tier,
   type WeddingEvent,
 } from "@/content/wedding";
+import { DEFAULT_LOCALE, LOCALE_TAGS, isLocale } from "@/i18n/locales";
+import { eventCopy, logisticsCopy, override } from "@/i18n/weddingCopy";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ScallopEdge } from "@/components/rsvp/ui";
 
 /**
@@ -23,16 +27,21 @@ import { ScallopEdge } from "@/components/rsvp/ui";
  * surfaces on scroll via the `scroll-*` utilities in globals.css.
  *
  * There is no `"use client"` here on purpose. Every animation on this screen —
- * the curtain, the staggered rises, the scroll reveals — is CSS, so the whole
- * landing ships as static HTML with no JS bundle behind it. Adding one piece
- * of state would quietly undo that; think before you do.
+ * the curtain, the staggered rises, the scroll reveals — is CSS, so the page
+ * itself ships as static HTML. The one client island is `LanguageSwitcher` in
+ * the hero, and it is deliberate: a guest who reads only Odia has to be able
+ * to switch before reading anything, which no CSS-only control can do. Keep it
+ * the only one — adding state to the page itself would undo the rest.
  *
  * It is tier-aware where the mockup isn't. The mockup always lists every day
  * because it has one imagined guest; a reception-only guest shown all five
  * would be reading an invitation to four events they aren't invited to.
  */
-export function InviteLanding({ tier }: { tier: Tier }) {
+export async function InviteLanding({ tier }: { tier: Tier }) {
   const events = eventsForTier(tier);
+  const t = await getTranslations("landing");
+  const tCommon = await getTranslations("common");
+  const tag = await localeTag();
 
   return (
     <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand">
@@ -41,14 +50,10 @@ export function InviteLanding({ tier }: { tier: Tier }) {
 
       <section className="scroll-reveal px-[34px] pt-[34px] pb-2.5 text-center">
         <p className="text-pretty font-serif text-2xl font-light leading-[1.35] text-driftwood">
-          {events.length === 1
-            ? "One evening barefoot on the same stretch of sand."
-            : `${titleCaseCount(dayCount(events))} days barefoot on the same stretch of sand.`}
+          {t("lede", { days: dayCount(events) })}
         </p>
         <p className="mt-3.5 text-pretty font-sans text-[14.5px] leading-[1.75] text-driftwood-soft">
-          {events.length === 1
-            ? "One celebration, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — timings, directions, dress code — lives in this app."
-            : `${titleCaseCount(events.length)} celebrations, one shoreline. Come early, stay late, and let the tide keep time. Everything you need — schedule, pickups, dress codes — lives in this app.`}
+          {t("blurb", { count: events.length })}
         </p>
       </section>
 
@@ -58,7 +63,7 @@ export function InviteLanding({ tier }: { tier: Tier }) {
 
       <section className="px-6 pt-1.5">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-          {sectionHeading(events.length)}
+          {t("daysHeading", { days: events.length })}
         </h2>
 
         <ul className="flex flex-col gap-2.5">
@@ -75,10 +80,10 @@ export function InviteLanding({ tier }: { tier: Tier }) {
 
       <section className="scroll-lift px-[30px] pt-[34px] pb-[46px] text-center">
         <p className="font-serif text-[21px] font-light italic leading-[1.4] text-driftwood">
-          Will you be with us?
+          {t("willYouBeWithUs")}
         </p>
         <p className="mt-2 font-sans text-[13px] leading-[1.6] text-driftwood-soft">
-          Kindly reply by {rsvpDeadlineLongLabel()}
+          {t("replyBy", { date: rsvpDeadlineLongLabel(tag) })}
         </p>
 
         <div className="mt-5 flex flex-col gap-2.5">
@@ -88,60 +93,46 @@ export function InviteLanding({ tier }: { tier: Tier }) {
             href={rsvpHref(tier)}
             className="rounded-pill bg-coral p-4 font-sans text-[14.5px] font-medium leading-none tracking-[0.04em] text-foam shadow-[0_8px_22px_rgba(226,138,118,0.4)] transition-colors hover:bg-coral-deep"
           >
-            RSVP for your family
+            {t("ctaRsvp")}
           </Link>
           <a
             href="#travel"
             className="rounded-pill border border-deeptide/50 p-[15px] font-sans text-[14.5px] font-medium leading-none text-deeptide transition-colors hover:bg-deeptide/7"
           >
-            Travel &amp; stay details
+            {t("ctaTravel")}
           </a>
         </div>
 
         <SingleWave className="mx-auto mt-8 w-[70%] text-warmgold opacity-60" />
         <p className="mt-3.5 font-display text-[22px] leading-none text-driftwood-soft">
-          see you by the water
+          {t("signOff")}
         </p>
         <p className="mt-6 font-sans text-[11px] tracking-wide text-driftwood-faint">
-          Made by ARBriterrey
+          {tCommon("madeBy")}
         </p>
       </section>
     </main>
   );
 }
 
-function sectionHeading(count: number): string {
-  if (count === 1) return "The day";
-  return `The ${countWord(count)} days`;
+/**
+ * The BCP-47 tag the `Intl` formatters in wedding.ts want, from the cookie
+ * locale. Those helpers default to `en-IN`; without this the dates under a
+ * Hindi hero would still read "Mon, 28 December 2026".
+ */
+async function localeTag(): Promise<string> {
+  const locale = await getLocale();
+  return LOCALE_TAGS[isLocale(locale) ? locale : DEFAULT_LOCALE];
 }
 
 /**
- * Copy counts everything rather than hardcoding it. The schedule has already
- * moved once — five events over four days became five over three — and prose
- * that says "four days" while the list below shows three is the kind of error
- * nobody notices until a guest does.
+ * Distinct calendar days the guest is invited across, in the wedding's zone.
+ *
+ * Counted rather than hardcoded: the schedule has already moved once — five
+ * events over four days became five over three — and prose that says "four
+ * days" while the list below shows three is the kind of error nobody notices
+ * until a guest does.
  */
-const COUNT_WORDS = [
-  "",
-  "one",
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-];
-
-function countWord(count: number): string {
-  return COUNT_WORDS[count] ?? String(count);
-}
-
-function titleCaseCount(count: number): string {
-  const word = countWord(count);
-  return word.charAt(0).toUpperCase() + word.slice(1);
-}
-
-/** Distinct calendar days the guest is invited across, in the wedding's zone. */
 function dayCount(events: WeddingEvent[]): number {
   const days = new Set(
     events.map((event) =>
@@ -168,7 +159,12 @@ function dayCount(events: WeddingEvent[]): number {
  * ~2 seconds, and a guest who taps in that window should reach the page under
  * it, not the panel.
  */
-function Curtain() {
+async function Curtain() {
+  const t = await getTranslations("wedding");
+  const shortLabel = t.has("destination.shortLabel")
+    ? t("destination.shortLabel")
+    : DESTINATION.shortLabel;
+
   return (
     <div
       aria-hidden
@@ -184,7 +180,7 @@ function Curtain() {
           {COUPLE.partnerB.charAt(0)}
         </div>
         <div className="mt-3.5 font-sans text-[9px] font-medium uppercase tracking-[0.4em] text-[#8c6b3a]">
-          {DESTINATION.shortLabel}
+          {shortLabel}
         </div>
       </div>
 
@@ -201,10 +197,25 @@ function Curtain() {
  * two are a single choreographed move — change one delay and the other has to
  * follow, or the names rise onto a panel that hasn't lifted yet.
  */
-function Hero() {
+async function Hero() {
+  const t = await getTranslations("landing");
+  const tWedding = await getTranslations("wedding");
+  const tag = await localeTag();
+  const label = tWedding.has("destination.label")
+    ? tWedding("destination.label")
+    : DESTINATION.label;
+
   return (
     <div className="relative h-[600px] overflow-hidden bg-[linear-gradient(170deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_40%,var(--color-shallows)_72%,var(--color-horizon)_100%)]">
       <div className="animate-glow absolute inset-0 bg-[radial-gradient(38%_26%_at_70%_70%,rgba(255,236,200,0.85),transparent_70%)]" />
+
+      {/* Above the curtain (z-20) rather than under it: the switcher is the one
+          control that must be reachable before the guest has read anything,
+          and the curtain covers the page for the first ~2 seconds. */}
+      <LanguageSwitcher
+        tone="ocean"
+        className="absolute right-3 top-3 z-30 justify-end"
+      />
 
       <Palm className="animate-sway absolute -left-[26px] -top-3.5 w-[190px] opacity-50" />
       <Palm
@@ -217,7 +228,7 @@ function Hero() {
           className="animate-rise font-sans text-[9.5px] font-medium uppercase tracking-[0.42em] text-[rgba(251,246,238,0.8)]"
           style={{ animationDelay: "3s" }}
         >
-          Save the date
+          {t("saveTheDate")}
         </p>
 
         <p
@@ -230,7 +241,7 @@ function Hero() {
           className="animate-rise my-2 font-serif text-xl font-light italic leading-none text-[#f6d9a8]"
           style={{ animationDelay: "3.5s" }}
         >
-          and
+          {t("and")}
         </p>
         <p
           className="animate-rise font-display text-[70px] leading-[0.9] text-[#fff9f0] [text-shadow:0_3px_26px_rgba(15,62,64,0.35)]"
@@ -245,7 +256,7 @@ function Hero() {
         >
           <span className="h-px w-[34px] bg-[rgba(251,246,238,0.5)]" />
           <span className="font-sans text-[12.5px] uppercase leading-[1.6] tracking-[0.2em] text-[#fff9f0]">
-            {weddingDateRangeLabel()}
+            {weddingDateRangeLabel(tag)}
           </span>
           <span className="h-px w-[34px] bg-[rgba(251,246,238,0.5)]" />
         </div>
@@ -254,7 +265,7 @@ function Hero() {
           className="animate-rise mt-2 font-serif text-[15px] font-light leading-[1.5] tracking-[0.06em] text-[rgba(255,249,240,0.9)]"
           style={{ animationDelay: "4.05s" }}
         >
-          {DESTINATION.label}
+          {label}
         </p>
       </div>
 
@@ -263,7 +274,7 @@ function Hero() {
         style={{ animationDelay: "4.4s" }}
       >
         <span className="font-sans text-[10px] uppercase tracking-[0.3em] text-[rgba(251,246,238,0.75)]">
-          Scroll
+          {t("scroll")}
         </span>
         <span className="h-[26px] w-px bg-[linear-gradient(rgba(251,246,238,0.8),transparent)]" />
       </div>
@@ -273,7 +284,11 @@ function Hero() {
   );
 }
 
-function DayCard({ event }: { event: WeddingEvent }) {
+async function DayCard({ event }: { event: WeddingEvent }) {
+  const t = await getTranslations("wedding");
+  const copy = eventCopy(t, event);
+  const tag = await localeTag();
+
   return (
     <div className="scroll-reveal flex items-center gap-3.5 rounded-card bg-card px-4 py-3.5">
       <span
@@ -281,14 +296,14 @@ function DayCard({ event }: { event: WeddingEvent }) {
           ACCENT_FILL[event.accent]
         }`}
       >
-        {eventDayNumber(event.startsAt)}
+        {eventDayNumber(event.startsAt, tag)}
       </span>
       <span className="flex-1">
         <span className="block font-display text-[26px] leading-none text-driftwood">
-          {event.name}
+          {copy.name}
         </span>
         <span className="mt-1 block font-sans text-xs leading-[1.4] text-driftwood-soft">
-          {event.daypart} · {event.venueShort} · {event.dressCode}
+          {copy.daypart} · {copy.venueShort} · {copy.dressCode}
         </span>
       </span>
     </div>
@@ -308,34 +323,47 @@ function DayCard({ event }: { event: WeddingEvent }) {
  * NOTE: the shuttle and room block are PLACEHOLDERS from LOGISTICS — neither is
  * arranged yet. The airport and station themselves are real.
  */
-function TravelAndStay() {
+async function TravelAndStay() {
+  const t = await getTranslations("landing");
+  const tWedding = await getTranslations("wedding");
+  const shuttle = logisticsCopy(tWedding, "shuttle", LOGISTICS.shuttle);
+  const stay = logisticsCopy(tWedding, "stay", LOGISTICS.stay);
+
   return (
     <section id="travel" className="scroll-reveal scroll-mt-6 px-6 pt-9">
       <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-        Travel &amp; stay
+        {t("travelHeading")}
       </h2>
 
       <div className="flex flex-col gap-2.5">
+        {/* Station and airport *names* stay Latin on purpose — a guest reads
+            them off a ticket or a signboard, and transliterating "BAM" helps
+            nobody. Only the distance notes around them translate. */}
         <LogisticsRow
-          title={`Train to ${LOGISTICS.station.name}`}
-          description={LOGISTICS.station.note}
+          title={t("trainTo", { station: LOGISTICS.station.name })}
+          description={override(
+            tWedding,
+            "logistics.station.note",
+            LOGISTICS.station.note
+          )}
         />
         <LogisticsRow
-          title={`Fly into ${LOGISTICS.airport.code} (${LOGISTICS.airport.name})`}
-          description={LOGISTICS.airport.note}
+          title={t("flyInto", {
+            code: LOGISTICS.airport.code,
+            city: LOGISTICS.airport.name,
+          })}
+          description={override(
+            tWedding,
+            "logistics.airport.note",
+            LOGISTICS.airport.note
+          )}
         />
-        <LogisticsRow
-          title={LOGISTICS.shuttle.title}
-          description={LOGISTICS.shuttle.description}
-        />
-        <LogisticsRow
-          title={LOGISTICS.stay.title}
-          description={LOGISTICS.stay.description}
-        />
+        <LogisticsRow title={shuttle.title} description={shuttle.description} />
+        <LogisticsRow title={stay.title} description={stay.description} />
       </div>
 
       <p className="mt-3.5 text-center font-sans text-[11.5px] leading-[1.6] text-driftwood-faint">
-        Tell us how you&apos;re arriving when you RSVP and we&apos;ll send a car.
+        {t("travelNote")}
       </p>
     </section>
   );
@@ -361,7 +389,9 @@ function LogisticsRow({
 }
 
 /** The scalloped photo band. A placeholder until the couple supply an image. */
-function PhotoBand() {
+async function PhotoBand() {
+  const t = await getTranslations("landing");
+
   return (
     <div className="scroll-lift relative mt-[30px] h-[230px] bg-[linear-gradient(140deg,var(--color-dune),var(--color-dune-deep))]">
       <div className="animate-tide absolute inset-0 bg-[radial-gradient(50%_60%_at_30%_40%,rgba(111,169,166,0.45),transparent_70%),radial-gradient(50%_50%_at_75%_60%,rgba(226,138,118,0.4),transparent_70%)] blur-[4px]" />
@@ -369,7 +399,7 @@ function PhotoBand() {
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
         <Shell className="w-11 text-bark opacity-55" />
         <span className="font-sans text-[11px] uppercase leading-none tracking-[0.24em] text-bark">
-          Photo — couple on the shore
+          {t("photoPlaceholder")}
         </span>
       </div>
 

@@ -1,0 +1,94 @@
+import type { ScheduleItem, WeddingEvent } from "@/content/wedding";
+
+/**
+ * Wedding facts stay authored in English in `content/wedding.ts`; the message
+ * catalogues only *override* them.
+ *
+ * The alternative — copying every event name into `messages/en.json` — would
+ * give the same string two homes and no way to tell which one was edited last.
+ * `wedding.ts` is documented as the only place wedding facts live, and a file
+ * of ids and timestamps with the names moved out stops being readable as the
+ * schedule it's meant to be. So English falls through to the object, and
+ * `hi` / `kn` / `or` supply keys under the `wedding` namespace to replace it.
+ *
+ * The practical consequence: a key missing from a catalogue is not a bug and
+ * must not render as `wedding.events.haldi.name`. Anything still marked
+ * PLACEHOLDER in `wedding.ts` — venue names, dress codes — is deliberately
+ * absent from all four catalogues, because translating a string the couple
+ * hasn't confirmed only means translating it twice.
+ */
+export type Lookup = ((key: string) => string) & {
+  has: (key: string) => boolean;
+};
+
+function pick(t: Lookup, key: string, fallback: string): string {
+  return t.has(key) ? t(key) : fallback;
+}
+
+/**
+ * The same fallback rule for a one-off string that doesn't belong to any of
+ * the shapes below — the distance notes under the airport and station rows,
+ * whose titles are built by ICU on the page but whose bodies are plain facts.
+ */
+export { pick as override };
+
+export interface EventCopy {
+  name: string;
+  venue: string;
+  venueShort: string;
+  dressCode: string;
+  daypart: string;
+  /** Only the wedding has one — the muhurat. */
+  highlightLabel?: string;
+}
+
+/** Pass a translator scoped to the `wedding` namespace. */
+export function eventCopy(t: Lookup, event: WeddingEvent): EventCopy {
+  const base = `events.${event.id}`;
+  return {
+    name: pick(t, `${base}.name`, event.name),
+    venue: pick(t, `${base}.venue`, event.venue),
+    venueShort: pick(t, `${base}.venueShort`, event.venueShort),
+    dressCode: pick(t, `${base}.dressCode`, event.dressCode),
+    daypart: pick(t, `${base}.daypart`, event.daypart),
+    highlightLabel: event.highlight
+      ? pick(t, `${base}.highlight`, event.highlight.label)
+      : undefined,
+  };
+}
+
+export interface ScheduleCopy {
+  name: string;
+  note?: string;
+}
+
+/**
+ * Meals are keyed by *kind*, not by id: `breakfast-29` and `breakfast-30` are
+ * the same word, and asking a translator for it twice invites them to drift.
+ * The trailing day number is dropped, so a new `breakfast-31` needs no new key.
+ */
+export function scheduleCopy(t: Lookup, item: ScheduleItem): ScheduleCopy {
+  const kind = item.id.replace(/-\d+$/, "");
+  return {
+    name: pick(t, `schedule.${kind}.name`, item.name),
+    note: item.note
+      ? pick(t, `schedule.${item.id}.note`, item.note)
+      : undefined,
+  };
+}
+
+export interface LogisticsCopy {
+  title: string;
+  description: string;
+}
+
+export function logisticsCopy(
+  t: Lookup,
+  key: "shuttle" | "stay",
+  fallback: { title: string; description: string }
+): LogisticsCopy {
+  return {
+    title: pick(t, `logistics.${key}.title`, fallback.title),
+    description: pick(t, `logistics.${key}.description`, fallback.description),
+  };
+}

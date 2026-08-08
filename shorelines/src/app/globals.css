@@ -44,10 +44,26 @@
   --color-hairline-dashed: #dccdb4; /* the dashed "anything else" box */
   --color-shell: #ede6da; /* inactive fills, progress track */
 
-  /* Type — the font vars are set by next/font in layout.tsx */
-  --font-display: var(--font-parisienne); /* step titles, couple names */
-  --font-serif: var(--font-cormorant); /* pull quotes */
-  --font-sans: var(--font-jost); /* UI + body, 16/14/12, min 12px */
+  /*
+   * Type — the font vars are set by next/font in layout.tsx.
+   *
+   * Each stack ends with the three Noto Indic faces. Parisienne, Cormorant and
+   * Jost carry no Devanagari, Kannada or Odia glyphs, so without these the
+   * browser substitutes per-character and Hindi body copy renders in a system
+   * face beside Latin numerals in the same line. Order doesn't cause the Latin
+   * text to shift: a fallback is only reached for a glyph the earlier fonts
+   * genuinely lack.
+   *
+   * --font-display has no script equivalent — Parisienne is a Latin script
+   * face, and there is no Devanagari cursive that pairs with it. Headlines in
+   * the other three languages resolve to Noto and read as clean sans, which is
+   * the honest outcome rather than a mismatched imitation.
+   */
+  --font-indic: var(--font-indic-hi), var(--font-indic-kn),
+    var(--font-indic-or);
+  --font-display: var(--font-parisienne), var(--font-indic); /* step titles */
+  --font-serif: var(--font-cormorant), var(--font-indic); /* pull quotes */
+  --font-sans: var(--font-jost), var(--font-indic); /* UI + body, min 12px */
 
   /* Radii — 1c uses 16px cards and full-round pills */
   --radius-card: 16px;
@@ -63,6 +79,23 @@ body {
   color: var(--color-driftwood);
   /* Guests read this outdoors in sunlight — keep body text from going thin. */
   -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Wide letter-spacing is a Latin typographic device, and this design leans on
+ * it hard (uppercase eyebrows at 0.3–0.42em). Devanagari, Kannada and Odia
+ * render a syllable as a base letter plus attached matras and conjuncts, so
+ * `letter-spacing` prises those pieces off the letter they belong to — Odia
+ * "ତାରିଖ" comes apart into loose fragments and reads as broken text, not as
+ * elegance. Zero it out for the three Indic locales rather than dropping the
+ * utilities from the markup, so English keeps the identity's typography.
+ *
+ * Matching on the class attribute is blunt but it is the only hook: Tailwind
+ * emits `tracking-*` as inline utility rules, and a descendant selector beats
+ * their single-class specificity without needing `!important` anywhere.
+ */
+html:not([lang="en-IN"]) [class*="tracking-"] {
+  letter-spacing: normal;
 }
 
 /* The slow light-sweep behind the confirmation checkmark. */
