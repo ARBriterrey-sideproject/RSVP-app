@@ -129,9 +129,9 @@ export function StepTable({
 
       {/*
         This field carries the weight the six-option list used to. Veg/non-veg
-        is a coarse split, so the placeholder names the specific things people
-        would otherwise look for as buttons — Jain, satvik, allergies — to make
-        clear they belong here rather than being unsupported.
+        is a coarse split, so the placeholder names the kinds of thing people
+        would otherwise look for as buttons, to make clear they belong here
+        rather than being unsupported.
       */}
       <div className="mt-[18px] rounded-card border border-dashed border-hairline-dashed bg-white p-4">
         <Eyebrow>Dietary restrictions</Eyebrow>
@@ -140,7 +140,7 @@ export function StepTable({
           onChange={(e) => onNotesChange(e.target.value.slice(0, MAX_NOTE_LEN))}
           rows={3}
           aria-label="Dietary restrictions"
-          placeholder="Jain, satvik, vegan, allergies — anything the kitchen should know"
+          placeholder="Vegan, allergies — anything the kitchen should know"
           className="mt-2.5 w-full resize-none bg-transparent font-sans text-sm leading-[1.5] text-driftwood outline-none placeholder:text-driftwood-faint"
         />
       </div>

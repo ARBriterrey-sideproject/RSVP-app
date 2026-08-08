@@ -423,45 +423,30 @@ export function mapsUrl(event: WeddingEvent): string {
  * and be understood, rather than picking the nearest of six labels.
  *
  * Values are stable IDs; labels are translated. `vegetarian` deliberately keeps
- * its old id so RSVPs stored before the change still hydrate. The four retired
- * ids are handled in isDietaryOption — see the note there.
+ * its old id so RSVPs stored before the change still hydrate.
  */
 export const DIETARY_OPTIONS = ["vegetarian", "non_vegetarian"] as const;
 
 export type DietaryOption = (typeof DIETARY_OPTIONS)[number];
 
-/**
- * Ids written by the previous six-option model, mapped onto the two that
- * remain. Nothing in the emulator matters, but a real RSVP taken before the
- * change would otherwise hydrate to the default and silently flip someone's
- * seafood answer to vegetarian.
- */
-const RETIRED_DIETARY_IDS: Record<string, DietaryOption> = {
-  jain: "vegetarian",
-  satvik: "vegetarian",
-  vegan: "vegetarian",
-  seafood_non_veg: "non_vegetarian",
-  no_restriction: "non_vegetarian",
-};
-
-/**
- * Guards data read back out of Firestore, which is untyped at the edge.
- *
- * Retired ids are NOT accepted here — they're migrated by `normaliseDietary`
- * before they reach a guard, so that a stored `jain` becomes `vegetarian`
- * rather than merely passing validation and confusing the radio list.
- */
+/** Guards data read back out of Firestore, which is untyped at the edge. */
 export function isDietaryOption(value: unknown): value is DietaryOption {
   return (DIETARY_OPTIONS as readonly string[]).includes(value as string);
 }
 
-/** Coerces any stored value — current, retired or junk — to a live option. */
+/**
+ * Coerces any stored value to a live option.
+ *
+ * An earlier six-option list (jain, satvik, vegan, seafood_non_veg,
+ * no_restriction) was carried forward by an explicit migration map here. It's
+ * gone: those ids were only ever written against the emulator, which is wiped
+ * on every restart, so there is nothing in existence to migrate. If a real
+ * project is ever seeded from old data, restore the map from git rather than
+ * letting values fall through to the default — silently turning someone's
+ * seafood answer into vegetarian is worse than rejecting it.
+ */
 export function normaliseDietary(value: unknown): DietaryOption {
-  if (isDietaryOption(value)) return value;
-  if (typeof value === "string" && value in RETIRED_DIETARY_IDS) {
-    return RETIRED_DIETARY_IDS[value];
-  }
-  return "vegetarian";
+  return isDietaryOption(value) ? value : "vegetarian";
 }
 
 /**

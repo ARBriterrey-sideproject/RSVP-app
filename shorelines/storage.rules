@@ -7,9 +7,15 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      return isSignedIn() && request.auth.token.role == 'admin';
+    /* Mirrors roleRank() in firestore.rules — see src/lib/auth/roles.ts. */
+    function roleRank() {
+      return isSignedIn()
+        ? {'admin': 3, 'couple': 2, 'coordinator': 1}
+            .get(request.auth.token.get('role', ''), 0)
+        : 0;
     }
+
+    function isCouple() { return roleRank() >= 2; }
 
     // Per-event photo albums. The ownerUid segment is what stops guests
     // overwriting each other's uploads.
@@ -21,12 +27,12 @@ service firebase.storage {
                    && request.resource.size < 15 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
 
-      allow delete: if isAdmin();
+      allow delete: if isCouple();
     }
 
     // Voice-note memories: write-only for guests, mirroring the Firestore rule.
     match /memories/{ownerUid}/{fileId} {
-      allow read: if isAdmin();
+      allow read: if isCouple();
 
       allow write: if isSignedIn()
                    && request.auth.uid == ownerUid

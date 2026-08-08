@@ -17,7 +17,9 @@ import { Card, Eyebrow, RadioDot, StepIntro, StepTitle, Toggle } from "../ui";
  * RSVP without touching a single field, so nothing on this step ever blocks
  * submission — it exists to help the couple arrange cars, not to interrogate.
  *
- * The room block is informational and PLACEHOLDER; it isn't booked.
+ * Stay is deliberately absent: nothing here books a room, so a card about one
+ * mid-form reads as a booking step the guest has to deal with. The room block
+ * stays on the landing, where it's plainly just information.
  */
 export function StepTravel({
   travel,
@@ -37,8 +39,8 @@ export function StepTravel({
     <div className="animate-fade-in">
       <StepTitle>Getting there</StepTitle>
       <StepIntro>
-        So we can send a car and hold a room. Skip anything you haven&apos;t
-        booked yet.
+        So we know when you land and can send a car. Skip anything you
+        haven&apos;t booked yet.
       </StepIntro>
 
       <div className="mt-[22px] flex gap-2.5">
@@ -122,17 +124,6 @@ export function StepTravel({
           />
         </Card>
       )}
-
-      {/* Informational only — the room block isn't something a guest picks. */}
-      <Card className="mt-2.5 px-4 py-3.5">
-        <Eyebrow>Staying at</Eyebrow>
-        <div className="mt-2 font-sans text-base leading-snug text-driftwood">
-          {LOGISTICS.stay.title}
-        </div>
-        <p className="mt-1 font-sans text-[12.5px] leading-[1.5] text-driftwood-soft">
-          {LOGISTICS.stay.description}
-        </p>
-      </Card>
     </div>
   );
 

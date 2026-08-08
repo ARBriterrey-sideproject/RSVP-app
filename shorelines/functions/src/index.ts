@@ -1,7 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 
 initializeApp();
 const db = getFirestore();
@@ -31,25 +33,71 @@ const INVITE_ONLY_EVENT_IDS: readonly string[] = ["speakeasy"];
 
 const DIETARY = ["vegetarian", "non_vegetarian"] as const;
 
-/**
- * The list shrank from six options to two (the couple asked for a plain
- * veg/non-veg split, with the specifics moved to the free-text notes field).
- * Rejecting an old value would make a returning guest's stored answer
- * unsubmittable, so retired ids are folded forward instead. Keep in sync with
- * RETIRED_DIETARY_IDS in src/content/wedding.ts.
- */
-const RETIRED_DIETARY: Record<string, (typeof DIETARY)[number]> = {
-  jain: "vegetarian",
-  satvik: "vegetarian",
-  vegan: "vegetarian",
-  seafood_non_veg: "non_vegetarian",
-  no_restriction: "non_vegetarian",
-};
-
 const TRANSPORT_MODES = ["airplane", "train", "self"] as const;
 type TransportMode = (typeof TRANSPORT_MODES)[number];
 
 const LOCALES = ["en", "hi", "kn", "or"] as const;
+
+/**
+ * Staff roles. Nested, not overlapping — see src/lib/auth/roles.ts, which holds
+ * the same table for the client, and roleRank() in firestore.rules.
+ */
+const STAFF_ROLES = ["coordinator", "couple", "admin"] as const;
+type StaffRole = (typeof STAFF_ROLES)[number];
+
+const RANK: Record<StaffRole, number> = {
+  coordinator: 1,
+  couple: 2,
+  admin: 3,
+};
+
+function rankOf(role: unknown): number {
+  return (STAFF_ROLES as readonly string[]).includes(role as string)
+    ? RANK[role as StaffRole]
+    : 0;
+}
+
+/**
+ * Who gets which role, keyed by email address.
+ *
+ * A roster rather than a database collection, and a roster rather than a
+ * one-off seeding script, because both alternatives have a bootstrap problem:
+ * granting the *first* admin needs an admin. An env var has no such hole, it is
+ * six lines for a six-person wedding, and it can't be edited by anything that
+ * compromises the app — only by someone who can already deploy.
+ *
+ * Set STAFF_ROSTER as JSON: {"bride@example.com":"couple","dj@example.com":"coordinator"}
+ * Locally that lives in functions/.env.local (emulator-only, never deployed).
+ */
+function staffRoster(): Record<string, StaffRole> {
+  const raw = process.env.STAFF_ROSTER;
+  if (!raw) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    // Never throw here: a malformed roster must fail closed (nobody gets a
+    // role) rather than take down every callable in the app.
+    logger.error("STAFF_ROSTER is not valid JSON — no roles will be granted.");
+    return {};
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    logger.error("STAFF_ROSTER must be a JSON object of email -> role.");
+    return {};
+  }
+
+  const out: Record<string, StaffRole> = {};
+  for (const [email, role] of Object.entries(parsed as Record<string, unknown>)) {
+    if ((STAFF_ROLES as readonly string[]).includes(role as string)) {
+      out[email.trim().toLowerCase()] = role as StaffRole;
+    } else {
+      logger.error(`STAFF_ROSTER: "${role}" is not a role; skipping ${email}.`);
+    }
+  }
+  return out;
+}
 
 /**
  * Soft cap on party size. Open access means anyone with a link can submit, so
@@ -150,16 +198,23 @@ function parseParty(value: unknown, requireLeadName: boolean): PartyMember[] {
   });
 }
 
+/**
+ * The list shrank from six options to two (the couple asked for a plain
+ * veg/non-veg split, with the specifics moved to the free-text notes field).
+ * A migration map used to fold the retired ids forward; it was removed with the
+ * client-side one in src/content/wedding.ts, since no document outside a
+ * throwaway emulator ever held them. These two must stay in sync — accepting an
+ * id here that the client can't render sends a guest to a blank radio list.
+ */
 function normaliseDietary(
   value: string,
   field: string
 ): (typeof DIETARY)[number] {
-  if ((DIETARY as readonly string[]).includes(value)) {
-    return value as (typeof DIETARY)[number];
-  }
-  const migrated = RETIRED_DIETARY[value];
-  assert(migrated !== undefined, `${field} is not a recognised option`);
-  return migrated;
+  assert(
+    (DIETARY as readonly string[]).includes(value),
+    `${field} is not a recognised option`
+  );
+  return value as (typeof DIETARY)[number];
 }
 
 /**
@@ -407,18 +462,21 @@ export const submitRsvp = onCall(
 /**
  * Flags (or unflags) a guest for an invitation-only event.
  *
- * Admin-only, and deliberately the *only* way the flag is ever set: Firestore
- * rules refuse every client write to `rsvps`, so even the couple's own account
- * goes through here. The guest's app reveals the speakeasy off this flag, and
- * `submitRsvp` re-checks it before accepting attendance.
+ * Couple and up — not coordinators. Who gets asked to the speakeasy is the
+ * couple's invitation to extend, not a logistics decision.
+ *
+ * Deliberately the *only* way the flag is ever set: Firestore rules refuse
+ * every client write to `rsvps`, so even the couple's own account goes through
+ * here. The guest's app reveals the speakeasy off this flag, and `submitRsvp`
+ * re-checks it before accepting attendance.
  */
 export const setSpeakeasyInvite = onCall(
   { region: REGION, enforceAppCheck: false },
   async (request) => {
-    if (request.auth?.token.role !== "admin") {
+    if (rankOf(request.auth?.token.role) < RANK.couple) {
       throw new HttpsError(
         "permission-denied",
-        "Only the couple and coordinators can change the guest list."
+        "Only the couple can change who's invited to the speakeasy."
       );
     }
 
@@ -446,6 +504,68 @@ export const setSpeakeasyInvite = onCall(
 
     await ref.update(update);
     return { ok: true, ownerUid, invited };
+  }
+);
+
+/**
+ * Reconciles the signed-in staff account's `role` custom claim with the roster.
+ *
+ * Called by the dashboard on every sign-in and on every app load. It both
+ * grants and revokes: an address removed from the roster loses its claim the
+ * next time that person opens the dashboard.
+ *
+ * The email-verified check is the load-bearing line. Without it, anyone who
+ * knows the bride's email address could register it with a password of their
+ * own choosing before she does, and inherit `couple` — which is read access to
+ * every guest's phone number and to the private memories inbox. A password
+ * account has to click a link in that mailbox first; a Google account arrives
+ * verified by Google.
+ *
+ * Note this is self-service by design: there is no "grant a role" endpoint, so
+ * there is no endpoint to abuse. The roster is the only authority, and changing
+ * it requires deploy access.
+ */
+export const syncRole = onCall(
+  { region: REGION, enforceAppCheck: false },
+  async (request) => {
+    const auth = request.auth;
+    if (!auth) {
+      throw new HttpsError("unauthenticated", "Sign in first.");
+    }
+
+    const email = String(auth.token.email ?? "").trim().toLowerCase();
+    const current = (auth.token.role as string | undefined) ?? null;
+
+    // A phone-auth guest reaching this endpoint has no email and simply gets
+    // nothing back — not an error, since the dashboard is a normal URL and a
+    // curious guest may well open it.
+    if (!email) return { role: null, changed: false };
+
+    if (auth.token.email_verified !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Confirm your email address first — check your inbox for the link."
+      );
+    }
+
+    const assigned = staffRoster()[email] ?? null;
+
+    if (assigned === current) return { role: assigned, changed: false };
+
+    // Replacing the whole claim object, not merging: dropping off the roster
+    // has to actually remove the role, not leave a stale one behind.
+    await getAuth().setCustomUserClaims(auth.uid, assigned ? { role: assigned } : {});
+
+    logger.info("staff role updated", {
+      uid: auth.uid,
+      email,
+      from: current,
+      to: assigned,
+    });
+
+    // The caller's existing ID token still carries the old claim — the client
+    // has to force-refresh before Firestore rules will see this.
+    return { role: assigned, changed: true };
   }
 );
 

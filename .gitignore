@@ -5,3 +5,10 @@
 # Agent guidance. Unanchored on purpose: this also covers shorelines/CLAUDE.md,
 # the pointer file `next dev` rewrites on every run.
 CLAUDE.md
+
+# Screenshots from browser-driven verification runs. Useful while working,
+# not worth versioning — they go stale the moment a style token changes.
+/.playwright-mcp/
+/demo-*.png
+
+.DS_Store

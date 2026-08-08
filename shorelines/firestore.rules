@@ -14,11 +14,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
-      // Set as a custom claim on real (email/Google) accounts for the couple
-      // and coordinators. Phone-auth guests never carry this.
-      return isSignedIn() && request.auth.token.role == 'admin';
+    /*
+     * Staff roles nest: admin > couple > coordinator. The `role` custom claim is
+     * set only by the syncRole callable, against a server-side roster, and only
+     * for accounts with a verified email — a phone-auth guest never carries one.
+     *
+     * Ranks must match RANK in src/lib/auth/roles.ts and functions/src/index.ts.
+     * An unknown or absent role ranks 0, so a signed-in stranger gets nothing.
+     */
+    function roleRank() {
+      return isSignedIn()
+        ? {'admin': 3, 'couple': 2, 'coordinator': 1}
+            .get(request.auth.token.get('role', ''), 0)
+        : 0;
     }
+
+    /** Anyone behind the dashboard at all. */
+    function isStaff() { return roleRank() >= 1; }
+
+    /** The couple and up. Excludes coordinators by design. */
+    function isCouple() { return roleRank() >= 2; }
+
+    function isAdmin() { return roleRank() >= 3; }
 
     function isOwner(ownerUid) {
       return isSignedIn() && request.auth.uid == ownerUid;
@@ -28,9 +45,10 @@ service cloud.firestore {
     // Doc id IS the phone-auth uid, which is what makes "same number returns to
     // the same record" work without any lookup.
     match /rsvps/{ownerUid} {
-      // A guest can read only their own. Admins can read all.
-      allow get: if isOwner(ownerUid) || isAdmin();
-      allow list: if isAdmin();
+      // A guest can read only their own. Any staff role can read all — a
+      // coordinator needs phone numbers and arrival times to arrange cars.
+      allow get: if isOwner(ownerUid) || isStaff();
+      allow list: if isStaff();
 
       // No client writes at all — not even from an admin. Creation and edits
       // go through the submitRsvp callable so that party-size caps and tier
@@ -59,13 +77,15 @@ service cloud.firestore {
     // Public read: the timeline and Today screen need these before sign-in.
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAdmin();
+      // Moving a ceremony reshapes every guest's schedule (and, via
+      // mealsForEvents, which meals they see) — that's the couple's call.
+      allow write: if isCouple();
     }
 
     // ---- Polls (v2) --------------------------------------------------------
     match /polls/{pollId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isCouple();
     }
 
     // One vote per verified phone per poll is enforced by the compound doc id
@@ -78,23 +98,28 @@ service cloud.firestore {
     // ---- Song requests (v2) ------------------------------------------------
     // Cutoff is checked server-side against the event's real start time.
     match /songRequests/{requestId} {
-      allow read: if isAdmin();
+      // Whoever is running the music on the night — coordinator included.
+      allow read: if isStaff();
       allow write: if false;
     }
 
     // ---- Memories (v2) -----------------------------------------------------
     // A private one-way inbox to the couple, NOT a public feed: guests may
     // create but never read back — not even their own.
+    //
+    // Couple and up, never coordinator. Guests write these believing they're
+    // writing to the two people getting married; a logistics hire reading them
+    // would break that promise silently.
     match /memories/{memoryId} {
-      allow read: if isAdmin();
+      allow read: if isCouple();
       allow create: if isSignedIn()
                     && request.resource.data.ownerUid == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update, delete: if isCouple();
     }
 
-    // ---- Admin-only aggregates --------------------------------------------
+    // ---- Staff-only aggregates --------------------------------------------
     match /aggregates/{docId} {
-      allow read: if isAdmin();
+      allow read: if isStaff();
       allow write: if false; // written by Functions only
     }
 
