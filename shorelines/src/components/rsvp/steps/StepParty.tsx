@@ -27,11 +27,14 @@ import {
  * plan. Only the first name is required.
  */
 export function StepParty({
-  phoneLabel,
+  phone,
+  onPhoneChange,
   party,
   onChange,
 }: {
-  phoneLabel: string;
+  /** Optional and unverified — see the doc comment on RsvpFlow's `phone` state. */
+  phone: string;
+  onPhoneChange: (next: string) => void;
   party: PartyMember[];
   onChange: (next: PartyMember[]) => void;
 }) {
@@ -79,8 +82,16 @@ export function StepParty({
           onChange={(e) => setName(primary.id, e.target.value)}
           className="mt-2 bg-white/70 px-3 py-2.5"
         />
+        <TextField
+          label={t("phoneLabel")}
+          type="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => onPhoneChange(e.target.value)}
+          className="mt-2.5 bg-white/70 px-3 py-2.5"
+        />
         <p className="mt-2 font-sans text-[12.5px] leading-snug text-driftwood-soft">
-          {phoneLabel}
+          {t("phoneHint")}
         </p>
       </Card>
 

@@ -10,8 +10,11 @@ import {
 import { dietaryCopy, override, transportCopy } from "@/i18n/weddingCopy";
 import { useLocaleTag } from "@/i18n/useLocaleTag";
 import { FamilyShare } from "../FamilyShare";
+import { InstallPrompt } from "../InstallPrompt";
+import { RecoveryLink } from "../RecoveryLink";
 import type { PartyMember, Travel } from "../types";
 import { Eyebrow, ScallopEdge } from "../ui";
+import type { Tier } from "@/content/wedding";
 
 /**
  * The confirmation screen from the mockup.
@@ -32,6 +35,8 @@ export function StepDone({
   travel,
   declined,
   shareCode,
+  recoveryCode,
+  tier,
   onEdit,
 }: {
   party: PartyMember[];
@@ -41,6 +46,9 @@ export function StepDone({
   declined: boolean;
   /** Null until the callable has minted one — see FamilyShare. */
   shareCode: string | null;
+  /** Null until the callable has minted one — see RecoveryLink. */
+  recoveryCode: string | null;
+  tier: Tier;
   onEdit: () => void;
 }) {
   const t = useTranslations("rsvp.done");
@@ -141,6 +149,12 @@ export function StepDone({
       {/* Nothing to share when they've declined — a QR onto "not attending" is
           just a way to make someone feel bad twice. */}
       {!declined && shareCode && <FamilyShare shareCode={shareCode} />}
+
+      {/* Unlike the family QR, this matters whether they're coming or not —
+          it's the guest's own way back to change either answer, and there's
+          no email or password behind Anonymous Auth to fall back on. */}
+      {recoveryCode && <RecoveryLink recoveryCode={recoveryCode} tier={tier} />}
+      {recoveryCode && <InstallPrompt recoveryCode={recoveryCode} />}
 
       <button
         type="button"
