@@ -29,6 +29,11 @@ export interface LiveConfigUpdate {
    * key-by-key merge survives.
    */
   emergencyContacts?: EmergencyContact[];
+  /**
+   * Lifts the 1-hour song-request cutoff entirely when `true`. Flat, not
+   * per-event — the couple flips it for the whole night, not row by row.
+   */
+  songRequestsOverride?: boolean;
 }
 
 /**

@@ -47,6 +47,7 @@ export const weddingConfig: WeddingConfig = {
     label: "Gopalpur, Odisha, India",
     shortLabel: "Gopalpur · Odisha",
     region: "Gopalpur",
+    coordinates: { lat: 19.264, lng: 84.902 },
   },
 
   /**

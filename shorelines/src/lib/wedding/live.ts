@@ -182,6 +182,10 @@ function decodeOverlay(
     events: asRecordOfRecords(raw.events),
     schedule: asRecordOfRecords(raw.schedule),
     emergencyContacts: asContacts(raw.emergencyContacts),
+    songRequestsOverride:
+      typeof raw.songRequestsOverride === "boolean"
+        ? raw.songRequestsOverride
+        : undefined,
     updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : undefined,
     updatedBy: typeof raw.updatedBy === "string" ? raw.updatedBy : undefined,
   };

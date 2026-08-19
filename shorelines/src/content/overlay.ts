@@ -58,6 +58,17 @@ export function emergencyContacts(
   return overlay?.emergencyContacts ?? [];
 }
 
+/**
+ * Whether song requests stay open past the normal 1-hour-before-the-event
+ * cutoff, for every event. Runtime-only, like the contacts above — there is
+ * no literal counterpart to fall back to, so absent just means "off".
+ */
+export function songRequestsOverride(
+  overlay: WeddingOverlay | null | undefined
+): boolean {
+  return overlay?.songRequestsOverride === true;
+}
+
 function mergeEvents(
   events: WeddingEvent[],
   overlay: WeddingOverlay

@@ -176,6 +176,8 @@ export interface WeddingConfig {
     shortLabel: string;
     /** Used bare in copy — "See you in Gopalpur". */
     region: string;
+    /** Decimal degrees. Feeds the Today screen's weather card — nothing else. */
+    coordinates: { lat: number; lng: number };
   };
   logistics: LogisticsConfig;
   /** Chronological. The landing, timeline and day-picker render it as given. */
@@ -235,6 +237,12 @@ export interface WeddingOverlay {
    * phone number, because the whole point of the list is the day it's needed.
    */
   emergencyContacts?: EmergencyContact[];
+  /**
+   * Runtime-native, like the contacts above: lets an admin keep the DJ queue
+   * open past the normal 1-hour-before-the-event cutoff for every event, from
+   * the dashboard, without a rebuild. Absent or `false` is the normal cutoff.
+   */
+  songRequestsOverride?: boolean;
   /** ISO 8601. Written server-side; shown in the dashboard as "last edited". */
   updatedAt?: string;
   /** The staff uid that last wrote this. Audit only, never rendered to guests. */

@@ -93,6 +93,20 @@ export const ACCENT_FILL: Record<EventAccent, string> = {
   clay: "bg-clay",
 };
 
+/**
+ * Same accent, translucent — the schedule's dress-code chip background. A
+ * third lookup rather than `${ACCENT_FILL[accent]}/15`: Tailwind's scanner
+ * only ever sees whole strings written out in source, so a concatenated
+ * opacity modifier never becomes a real class.
+ */
+export const ACCENT_TINT: Record<EventAccent, string> = {
+  warmgold: "bg-warmgold/15",
+  palm: "bg-palm/15",
+  coral: "bg-coral/15",
+  deeptide: "bg-deeptide/15",
+  clay: "bg-clay/15",
+};
+
 const ALL_TIERS: Tier[] = ["full", "wedding_only", "reception_only"];
 
 /* -------------------------------------------------------------------------
@@ -313,6 +327,91 @@ export function eventsForGuest(
 
 export function mapsUrl(event: WeddingEvent): string {
   return `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
+}
+
+/**
+ * Calendar-day key ("2026-12-29") of an instant, in the wedding's own zone —
+ * never the viewer's. Groups the schedule screen's timeline by day the same
+ * way for a guest reading from Bhubaneswar and one reading from London.
+ */
+export function dayKey(
+  iso: string,
+  config: WeddingConfig = weddingConfig
+): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: config.dates.timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+/** One event or one schedule item, ordered onto a single timeline by time. */
+export type TimelineEntry =
+  | { kind: "event"; at: string; event: WeddingEvent }
+  | { kind: "meal"; at: string; item: ScheduleItem };
+
+/** Merges events and schedule items into one chronological list. */
+export function scheduleTimeline(
+  events: WeddingEvent[],
+  items: ScheduleItem[]
+): TimelineEntry[] {
+  const entries: TimelineEntry[] = [
+    ...events.map((event) => ({
+      kind: "event" as const,
+      at: event.startsAt,
+      event,
+    })),
+    ...items.map((item) => ({
+      kind: "meal" as const,
+      at: item.startsAt,
+      item,
+    })),
+  ];
+  return entries.sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/**
+ * How long past the last event's close the "Today" screen keeps showing
+ * instead of flipping back to the pre-wedding invite. A guest checking the
+ * app after the reception winds down should still find emergency contacts and
+ * the day's recap, not a countdown to a wedding that already happened.
+ */
+const WEDDING_WINDOW_GRACE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * The stretch of real time the "Today" companion screen covers, bounded by
+ * the earliest event start and the latest event end across both the public
+ * events and the invitation-only ones — a guest with nothing left but the
+ * speakeasy shouldn't be dropped back on the invite while it's still running.
+ *
+ * `Date.parse`/millisecond arithmetic only, deliberately: every stored instant
+ * already carries its own UTC offset, so comparing timestamps needs no zone
+ * lookup and no guess about the machine asking.
+ */
+export function weddingWindow(config: WeddingConfig = weddingConfig): {
+  startsAt: Date;
+  endsAt: Date;
+} {
+  const events = [...config.events, ...config.invitationOnlyEvents];
+  const startsAt = new Date(
+    Math.min(...events.map((e) => Date.parse(e.startsAt)))
+  );
+  const latestEnd = Math.max(...events.map((e) => Date.parse(e.endsAt)));
+  return { startsAt, endsAt: new Date(latestEnd + WEDDING_WINDOW_GRACE_MS) };
+}
+
+/**
+ * Whether `now` falls inside the wedding's own days — the switch that decides
+ * whether `/` renders the pre-wedding invite or the live "Today" screen. See
+ * the "one app, one link, two phases" note in CLAUDE.md.
+ */
+export function isWeddingLive(
+  config: WeddingConfig = weddingConfig,
+  now: Date = new Date()
+): boolean {
+  const { startsAt, endsAt } = weddingWindow(config);
+  return now >= startsAt && now <= endsAt;
 }
 
 /* -------------------------------------------------------------------------
