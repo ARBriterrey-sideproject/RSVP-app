@@ -33,7 +33,7 @@ beforeEach(async () => {
 });
 
 describe("photos/{eventId}/{ownerUid}/{fileId}", () => {
-  it("lets any signed-in user read, refuses a signed-out visitor", async () => {
+  it("is readable only by the couple — not by another guest, a coordinator, or a signed-out visitor", async () => {
     const ownerStorage = testEnv.authenticatedContext("guest-1").storage();
     await assertSucceeds(
       uploadBytes(ref(ownerStorage, "photos/wedding/guest-1/f1.jpg"), SMALL_IMAGE, {
@@ -42,10 +42,20 @@ describe("photos/{eventId}/{ownerUid}/{fileId}", () => {
     );
 
     const otherStorage = testEnv.authenticatedContext("guest-2").storage();
-    await assertSucceeds(getBytes(ref(otherStorage, "photos/wedding/guest-1/f1.jpg")));
+    await assertFails(getBytes(ref(otherStorage, "photos/wedding/guest-1/f1.jpg")));
+
+    const coordinatorStorage = testEnv
+      .authenticatedContext("coordinator-1", { role: "coordinator" })
+      .storage();
+    await assertFails(getBytes(ref(coordinatorStorage, "photos/wedding/guest-1/f1.jpg")));
 
     const anon = testEnv.unauthenticatedContext().storage();
     await assertFails(getBytes(ref(anon, "photos/wedding/guest-1/f1.jpg")));
+
+    const coupleStorage = testEnv
+      .authenticatedContext("couple-1", { role: "couple" })
+      .storage();
+    await assertSucceeds(getBytes(ref(coupleStorage, "photos/wedding/guest-1/f1.jpg")));
   });
 
   it("lets a guest write only under their own uid segment", async () => {
