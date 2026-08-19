@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
@@ -11,6 +12,13 @@ const db = getFirestore();
 // asia-south1 (Mumbai) — guests and the couple are in India; this is the
 // nearest region and it must match getFunctions(app, region) on the client.
 const REGION = "asia-south1";
+
+// Set by the Functions emulator itself (firebase-tools), not something this
+// repo configures. App Check is enforced everywhere except under the
+// emulator, since there is no App Check emulator wired up (see
+// firebase.json) and the client skips initializeAppCheck for the same
+// reason — see the USE_EMULATOR branch in src/lib/firebase/client.ts.
+const ENFORCE_APP_CHECK = process.env.FUNCTIONS_EMULATOR !== "true";
 
 const TIERS = ["full", "wedding_only", "reception_only"] as const;
 type Tier = (typeof TIERS)[number];
@@ -100,6 +108,79 @@ function staffRoster(): Record<string, StaffRole> {
 }
 
 /**
+ * The same roster, keyed by E.164 phone number instead of email — a second
+ * way in for staff who'd rather not keep a password, added alongside the
+ * email/Google path rather than instead of it (see `syncRole`).
+ *
+ * A phone number is its own verification: signing in still goes through a
+ * real OTP, so there is no `phone_number_verified` gate to add here the way
+ * there is for `email_verified` below. What a phone roster entry does *not*
+ * get you is email's other property — the address can't be silently handed
+ * to a new owner the way a mobile number can (a couple of months unused, in
+ * India's telecom system, and it's reissued). Pull an entry the day that
+ * number stops being that person's, not just whenever convenient — a stale
+ * entry is a standing grant to whoever the carrier gives the number to next.
+ *
+ * Set STAFF_PHONE_ROSTER as JSON: {"+919876543210":"couple"}
+ */
+function staffPhoneRoster(): Record<string, StaffRole> {
+  const raw = process.env.STAFF_PHONE_ROSTER;
+  if (!raw) return {};
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    logger.error("STAFF_PHONE_ROSTER is not valid JSON — no roles will be granted.");
+    return {};
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    logger.error("STAFF_PHONE_ROSTER must be a JSON object of phone -> role.");
+    return {};
+  }
+
+  const out: Record<string, StaffRole> = {};
+  for (const [phone, role] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!(STAFF_ROLES as readonly string[]).includes(role as string)) {
+      logger.error(`STAFF_PHONE_ROSTER: "${role}" is not a role; skipping ${phone}.`);
+      continue;
+    }
+    const trimmed = phone.trim();
+    if (!/^\+[1-9]\d{7,14}$/.test(trimmed)) {
+      logger.error(`STAFF_PHONE_ROSTER: "${phone}" is not E.164; skipping.`);
+      continue;
+    }
+    out[trimmed] = role as StaffRole;
+  }
+  return out;
+}
+
+/**
+ * A coordinator has no photo access by default (see the tightened `photos/`
+ * rule in storage.rules) — the couple opts specific people in, one at a time,
+ * via `setStaffPhotoAccess`. `staffPhotoAccess/{identity}` keys off the same
+ * roster identity space as the two rosters above (`email:<lowercased>` or
+ * `phone:<e164>`), so a coordinator's grant survives them switching sign-in
+ * method. Couple and admin never need an entry — they pass by rank.
+ */
+function photoAccessIdentity(
+  auth: { token: { email?: unknown; phone_number?: unknown } } | undefined
+): string | null {
+  const email = String(auth?.token.email ?? "").trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const phone = String(auth?.token.phone_number ?? "").trim();
+  if (phone) return `phone:${phone}`;
+  return null;
+}
+
+async function hasPhotoAccess(identity: string | null): Promise<boolean> {
+  if (!identity) return false;
+  const snap = await db.collection("staffPhotoAccess").doc(identity).get();
+  return snap.get("allowed") === true;
+}
+
+/**
  * Soft cap on party size. Open access means anyone with a link can submit, so
  * this is the main thing stopping one bogus entry from skewing headcounts.
  * Keep in sync with PARTY_SIZE_SOFT_CAP in src/content/wedding.ts.
@@ -111,6 +192,9 @@ const MAX_NOTE_LEN = 500;
 
 /** "12703 Falaknuma" is longer than a flight number; both fit in 24. */
 const MAX_SERVICE_LEN = 24;
+
+/** Recovery codes are 20 chars (see newRecoveryCode); a little headroom. */
+const MAX_RECOVERY_CODE_LEN = 24;
 
 interface PartyMember {
   /** Empty for anyone the guest chose not to name — only party[0] is required. */
@@ -134,6 +218,7 @@ interface SubmitRsvpPayload {
   perEventAttendance?: unknown;
   notes?: unknown;
   travel?: unknown;
+  phone?: unknown;
 }
 
 function assert(condition: boolean, message: string): asserts condition {
@@ -339,13 +424,13 @@ function parseAttendance(value: unknown): Record<string, boolean> {
  *     is written by the dashboard, never here.
  */
 export const submitRsvp = onCall(
-  { region: REGION, enforceAppCheck: false },
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const uid = request.auth?.uid;
     if (!uid) {
       throw new HttpsError(
         "unauthenticated",
-        "Verify your phone number before submitting an RSVP."
+        "Sign in before submitting an RSVP."
       );
     }
 
@@ -356,6 +441,7 @@ export const submitRsvp = onCall(
 
     const party = parseParty(payload.party, isAttending);
     const travel = parseTravel(payload.travel);
+    const phone = optionalPhone(payload.phone);
 
     const language = (LOCALES as readonly string[]).includes(
       payload.language as string
@@ -408,6 +494,13 @@ export const submitRsvp = onCall(
       const shareCode: string =
         (existing.get("shareCode") as string | undefined) ?? newShareCode();
 
+      // Anonymous Auth carries no phone claim and no other durable credential,
+      // so this is the only way back into the reply from a new device — never
+      // mirrored into invites/{shareCode}, which is public.
+      const recoveryCode: string =
+        (existing.get("recoveryCode") as string | undefined) ??
+        newRecoveryCode();
+
       const base = {
         tier,
         language,
@@ -416,15 +509,25 @@ export const submitRsvp = onCall(
         perEventAttendance,
         travel,
         notes,
-        submittedByPhone: request.auth?.token.phone_number ?? null,
+        // Unverified — typed by the guest, kept only for the couple to call.
+        submittedByPhone: phone,
         shareCode,
+        recoveryCode,
         updatedAt: FieldValue.serverTimestamp(),
       };
 
       if (existing.exists) {
         tx.update(ref, base);
       } else {
-        tx.set(ref, { ...base, ownerUid: uid, createdAt: FieldValue.serverTimestamp() });
+        // `flagged` only set on creation — an update must never touch it, or a
+        // guest editing their own reply would silently clear a flag the couple
+        // put there on purpose.
+        tx.set(ref, {
+          ...base,
+          ownerUid: uid,
+          flagged: false,
+          createdAt: FieldValue.serverTimestamp(),
+        });
       }
 
       // The public mirror the QR points at. Written in the same transaction so
@@ -446,7 +549,7 @@ export const submitRsvp = onCall(
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      return { tier, created: !existing.exists, shareCode };
+      return { tier, created: !existing.exists, shareCode, recoveryCode };
     });
 
     return {
@@ -454,8 +557,58 @@ export const submitRsvp = onCall(
       tier: result.tier,
       created: result.created,
       shareCode: result.shareCode,
+      recoveryCode: result.recoveryCode,
       partySize: party.length,
     };
+  }
+);
+
+/**
+ * Format-checked only, never verified — Anonymous Auth carries no phone
+ * claim, so this is the guest's own typed number, kept for the couple to
+ * call rather than to establish identity. Optional: a guest who skips it
+ * still gets to RSVP.
+ */
+function optionalPhone(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  assert(typeof value === "string", "phone must be a string");
+  const trimmed = (value as string).trim();
+  if (trimmed.length === 0) return null;
+  assert(
+    /^\+[1-9]\d{7,14}$/.test(trimmed),
+    "phone is not a valid E.164 number"
+  );
+  return trimmed;
+}
+
+/**
+ * Exchanges a guest's recovery code for a sign-in token.
+ *
+ * Anonymous Auth has no password and no verified phone number, so the
+ * recovery code minted by submitRsvp is the only way back into an existing
+ * reply from a new device or a cleared browser. The rules deny `list` on
+ * `rsvps` to anyone but staff, so this lookup has to happen here, with the
+ * Admin SDK, rather than as a client-side query.
+ */
+export const recoverRsvp = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const { code } = (request.data ?? {}) as { code?: unknown };
+    const clean = cleanString(code, MAX_RECOVERY_CODE_LEN, "code");
+
+    const snap = await db
+      .collection("rsvps")
+      .where("recoveryCode", "==", clean)
+      .limit(1)
+      .get();
+
+    if (snap.empty) {
+      throw new HttpsError("not-found", "That recovery link isn't valid.");
+    }
+
+    const uid = snap.docs[0].id;
+    const token = await getAuth().createCustomToken(uid);
+    return { token };
   }
 );
 
@@ -471,7 +624,7 @@ export const submitRsvp = onCall(
  * re-checks it before accepting attendance.
  */
 export const setSpeakeasyInvite = onCall(
-  { region: REGION, enforceAppCheck: false },
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     if (rankOf(request.auth?.token.role) < RANK.couple) {
       throw new HttpsError(
@@ -508,6 +661,86 @@ export const setSpeakeasyInvite = onCall(
 );
 
 /**
+ * Marks a reply for the couple's attention (a suspicious headcount, a duplicate
+ * submission from a different phone) without removing it. Firestore rules
+ * refuse every client write to `rsvps`, so this callable is the only path even
+ * for the couple's own account, same as `setSpeakeasyInvite` above.
+ *
+ * `flagged` is only ever set at creation and never touched by `submitRsvp`'s
+ * update path — see the comment there. That is what lets a flag survive a
+ * guest going back in and editing their own reply.
+ */
+export const flagResponse = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.couple) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the couple can flag a reply."
+      );
+    }
+
+    const { ownerUid, flagged } = (request.data ?? {}) as {
+      ownerUid?: unknown;
+      flagged?: unknown;
+    };
+    assert(
+      typeof ownerUid === "string" && ownerUid.length > 0,
+      "ownerUid is required"
+    );
+    assert(typeof flagged === "boolean", "flagged must be a boolean");
+
+    const ref = db.collection("rsvps").doc(ownerUid as string);
+    const snap = await ref.get();
+    assert(snap.exists, "That guest has not replied yet.");
+
+    await ref.update({ flagged, updatedAt: FieldValue.serverTimestamp() });
+    return { ok: true, ownerUid, flagged };
+  }
+);
+
+/**
+ * Removes a bogus reply — the abuse-mitigation backstop for open access
+ * (anyone with a link can RSVP, so a rogue entry has to be removable). Deletes
+ * the mirrored `invites/{shareCode}` doc in the same batch so a forwarded QR
+ * for a deleted entry stops resolving instead of 404ing on a dangling read.
+ *
+ * The guest's Firebase Auth account is untouched: if they return with the same
+ * phone number, `submitRsvp` sees no existing doc and creates a fresh one, same
+ * as any first-time guest.
+ */
+export const deleteResponse = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.couple) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the couple can delete a reply."
+      );
+    }
+
+    const { ownerUid } = (request.data ?? {}) as { ownerUid?: unknown };
+    assert(
+      typeof ownerUid === "string" && ownerUid.length > 0,
+      "ownerUid is required"
+    );
+
+    const ref = db.collection("rsvps").doc(ownerUid as string);
+    const snap = await ref.get();
+    assert(snap.exists, "That guest has not replied yet.");
+
+    const shareCode = snap.get("shareCode") as string | undefined;
+    const batch = db.batch();
+    batch.delete(ref);
+    if (shareCode) batch.delete(db.collection("invites").doc(shareCode));
+    await batch.commit();
+
+    logger.info("rsvp deleted", { uid: request.auth?.uid, ownerUid });
+    return { ok: true, ownerUid };
+  }
+);
+
+/**
  * Reconciles the signed-in staff account's `role` custom claim with the roster.
  *
  * Called by the dashboard on every sign-in and on every app load. It both
@@ -526,7 +759,7 @@ export const setSpeakeasyInvite = onCall(
  * it requires deploy access.
  */
 export const syncRole = onCall(
-  { region: REGION, enforceAppCheck: false },
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
   async (request) => {
     const auth = request.auth;
     if (!auth) {
@@ -534,12 +767,37 @@ export const syncRole = onCall(
     }
 
     const email = String(auth.token.email ?? "").trim().toLowerCase();
+    const phone = String(auth.token.phone_number ?? "").trim();
     const current = (auth.token.role as string | undefined) ?? null;
+
+    // A phone-auth staff sign-in has already proven itself via OTP — that's
+    // the same bar `email_verified` clears below, so there is no separate
+    // gate here. Checked before email so a staff member who signed in with
+    // phone isn't sent down the email branch just because their Google
+    // account (if any) happens to also carry an address.
+    if (phone) {
+      const assigned = staffPhoneRoster()[phone] ?? null;
+      const photoAccess = assigned
+        ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(`phone:${phone}`))
+        : false;
+      if (assigned === current) return { role: assigned, changed: false, photoAccess };
+
+      await getAuth().setCustomUserClaims(auth.uid, assigned ? { role: assigned } : {});
+
+      logger.info("staff role updated (phone)", {
+        uid: auth.uid,
+        phone,
+        from: current,
+        to: assigned,
+      });
+
+      return { role: assigned, changed: true, photoAccess };
+    }
 
     // A phone-auth guest reaching this endpoint has no email and simply gets
     // nothing back — not an error, since the dashboard is a normal URL and a
     // curious guest may well open it.
-    if (!email) return { role: null, changed: false };
+    if (!email) return { role: null, changed: false, photoAccess: false };
 
     if (auth.token.email_verified !== true) {
       throw new HttpsError(
@@ -549,8 +807,11 @@ export const syncRole = onCall(
     }
 
     const assigned = staffRoster()[email] ?? null;
+    const photoAccess = assigned
+      ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(`email:${email}`))
+      : false;
 
-    if (assigned === current) return { role: assigned, changed: false };
+    if (assigned === current) return { role: assigned, changed: false, photoAccess };
 
     // Replacing the whole claim object, not merging: dropping off the roster
     // has to actually remove the role, not leave a stale one behind.
@@ -565,7 +826,152 @@ export const syncRole = onCall(
 
     // The caller's existing ID token still carries the old claim — the client
     // has to force-refresh before Firestore rules will see this.
-    return { role: assigned, changed: true };
+    return { role: assigned, changed: true, photoAccess };
+  }
+);
+
+/**
+ * Read-only view of who is on the roster and what they'd get, for the "Staff
+ * access" dashboard panel. Deliberately not a management endpoint: the roster
+ * stays an env-var / Secret Manager value, editable only by someone who can
+ * already deploy, because a Firestore-backed roster has a bootstrap problem —
+ * granting the first admin would itself require an admin (see `staffRoster`
+ * above). This only ever reads that same source and requires an admin claim
+ * to call, so it adds no new way in.
+ */
+export const getStaffRoster = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.admin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an admin can view the staff roster."
+      );
+    }
+
+    const email = Object.entries(staffRoster()).map(([email, role]) => ({
+      email,
+      role,
+    }));
+    const phone = Object.entries(staffPhoneRoster()).map(([phone, role]) => ({
+      phone,
+      role,
+    }));
+
+    const photoAccessSnap = await db.collection("staffPhotoAccess").get();
+    const photoAccess: Record<string, boolean> = {};
+    for (const doc of photoAccessSnap.docs) {
+      photoAccess[doc.id] = doc.get("allowed") === true;
+    }
+
+    return { email, phone, photoAccess };
+  }
+);
+
+/**
+ * Grants or revokes one specific coordinator's photo-view access. Admin-only,
+ * same as `setAlbumVisibility` — this shapes who gets access rather than just
+ * using it. Couple and admin identities never need an entry here since they
+ * pass the rank check in `listEventPhotos` regardless; writing or deleting a
+ * grant for one of them would be accepted but is simply never read.
+ */
+export const setStaffPhotoAccess = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.admin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an admin can change photo access."
+      );
+    }
+
+    const { kind, value, allowed } = (request.data ?? {}) as {
+      kind?: unknown;
+      value?: unknown;
+      allowed?: unknown;
+    };
+    assert(kind === "email" || kind === "phone", 'kind must be "email" or "phone"');
+    assert(typeof value === "string" && value.trim().length > 0, "value is required");
+    assert(typeof allowed === "boolean", "allowed must be a boolean");
+
+    const normalised = kind === "email" ? value.trim().toLowerCase() : value.trim();
+    if (kind === "phone") {
+      assert(
+        /^\+[1-9]\d{7,14}$/.test(normalised),
+        "value is not a valid E.164 phone number"
+      );
+    }
+    const identity = `${kind}:${normalised}`;
+    const ref = db.collection("staffPhotoAccess").doc(identity);
+
+    if (allowed) {
+      await ref.set({
+        allowed: true,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: request.auth?.uid ?? null,
+      });
+    } else {
+      await ref.delete();
+    }
+
+    return { ok: true, identity, allowed };
+  }
+);
+
+/**
+ * Server-side photo listing so a granted coordinator can browse an event's
+ * uploads without direct Storage SDK access — storage.rules' `photos/` read
+ * is couple-rank-only, so this callable (Admin SDK, bypasses those rules) is
+ * the only way a granted coordinator sees them. Couple/admin call this too,
+ * for one consistent code path on the client, even though the rules would
+ * also let them read directly.
+ */
+export const listEventPhotos = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const rank = rankOf(request.auth?.token.role);
+    if (rank < RANK.coordinator) {
+      throw new HttpsError(
+        "permission-denied",
+        "You need a staff account to view photos."
+      );
+    }
+    if (rank < RANK.couple) {
+      const identity = photoAccessIdentity(request.auth);
+      if (!(await hasPhotoAccess(identity))) {
+        throw new HttpsError(
+          "permission-denied",
+          "You don't have access to this event's photos."
+        );
+      }
+    }
+
+    const { eventId } = (request.data ?? {}) as { eventId?: unknown };
+    assert(
+      typeof eventId === "string" &&
+        Object.prototype.hasOwnProperty.call(EVENT_START_TIMES, eventId),
+      "eventId is not a recognised event"
+    );
+
+    const [files] = await getStorage()
+      .bucket()
+      .getFiles({ prefix: `photos/${eventId}/` });
+
+    const photos = await Promise.all(
+      files.map(async (file) => {
+        const [url] = await file.getSignedUrl({
+          action: "read",
+          expires: Date.now() + 60 * 60 * 1000,
+        });
+        return {
+          fullPath: file.name,
+          name: file.name.split("/").pop() ?? file.name,
+          url,
+        };
+      })
+    );
+
+    return { photos };
   }
 );
 
@@ -581,6 +987,332 @@ function newShareCode(): string {
   for (const byte of bytes) out += alphabet[byte % alphabet.length];
   return out;
 }
+
+/**
+ * The recovery code. Longer than the share code (20 vs 10 chars, same
+ * unambiguous alphabet) because this one grants sign-in — recoverRsvp mints a
+ * custom token for whoever holds it — rather than a read-only view.
+ */
+function newRecoveryCode(): string {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = randomBytes(20);
+  let out = "";
+  for (const byte of bytes) out += alphabet[byte % alphabet.length];
+  return out;
+}
+
+/* -------------------------------------------------------------------------
+ * v2 guest features: chat, memories, polls, song requests, photo albums.
+ * ---------------------------------------------------------------------- */
+
+/**
+ * Fallback event windows, duplicated from wedding.config.ts because Functions
+ * is a separate npm package with no import path into src/content — same
+ * precedent as RANK/STAFF_ROLES above, which duplicate src/lib/auth/roles.ts
+ * for the same reason. Overridden by config/live's events.{eventId} when the
+ * couple has moved a time, same overlay-first-then-literal order the client
+ * reads through. A schedule change in wedding.config.ts needs a matching edit
+ * here or the song-request cutoff silently desyncs from what guests see.
+ */
+const EVENT_START_TIMES: Record<string, { startsAt: string; endsAt: string }> = {
+  mehendi: { startsAt: "2026-12-28T19:00:00+05:30", endsAt: "2026-12-28T21:00:00+05:30" },
+  haldi: { startsAt: "2026-12-29T10:00:00+05:30", endsAt: "2026-12-29T14:00:00+05:30" },
+  sangeet: { startsAt: "2026-12-29T18:00:00+05:30", endsAt: "2026-12-29T21:00:00+05:30" },
+  wedding: { startsAt: "2026-12-30T10:00:00+05:30", endsAt: "2026-12-30T14:00:00+05:30" },
+  reception: { startsAt: "2026-12-30T18:30:00+05:30", endsAt: "2026-12-30T21:00:00+05:30" },
+  speakeasy: { startsAt: "2026-12-29T22:00:00+05:30", endsAt: "2026-12-30T01:00:00+05:30" },
+};
+
+const CHAT_COOLDOWN_MS = 3_000;
+const MAX_CHAT_LEN = 500;
+const MAX_SONG_LEN = 120;
+const MAX_ARTIST_LEN = 120;
+const SONG_REQUEST_CUTOFF_MS = 60 * 60 * 1000;
+const ALBUM_VISIBILITIES = ["shared", "private"] as const;
+
+function isValidRoomId(roomId: string): boolean {
+  return roomId === "group" || /^dm_[A-Za-z0-9]+$/.test(roomId);
+}
+
+/**
+ * Spam is the one new risk a guest write surface introduces: open access plus
+ * anonymous identity means chat is the first genuinely high-frequency write
+ * path in the app (everything else is one RSVP, one vote, one song request).
+ * A guest under cooldown is rejected before the message is written; staff are
+ * exempt, since a rostered account isn't the thing this is guarding against.
+ */
+export const sendChatMessage = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in before sending a message.");
+    }
+
+    const rank = rankOf(request.auth?.token.role);
+    const isStaffCaller = rank >= RANK.coordinator;
+
+    const { roomId, text, name } = (request.data ?? {}) as {
+      roomId?: unknown;
+      text?: unknown;
+      name?: unknown;
+    };
+    assert(
+      typeof roomId === "string" && isValidRoomId(roomId),
+      "roomId is not recognised"
+    );
+
+    // A guest may address the group room or their own concierge thread only —
+    // never another guest's dm_ room. Staff may reply into any thread.
+    if (!isStaffCaller) {
+      assert(
+        roomId === "group" || roomId === `dm_${uid}`,
+        "You may only message the group room or your own concierge thread."
+      );
+    }
+
+    const cleanText = cleanString(text, MAX_CHAT_LEN, "text");
+    const displayName = isStaffCaller
+      ? cleanString(name, MAX_NAME_LEN, "name")
+      : optionalString(name, MAX_NAME_LEN, "name") ?? "Guest";
+
+    if (!isStaffCaller) {
+      const cooldownRef = db.collection("chatCooldowns").doc(uid);
+      const cooldownSnap = await cooldownRef.get();
+      const lastSentAt = cooldownSnap.get("lastSentAt") as
+        | FirebaseFirestore.Timestamp
+        | undefined;
+      if (lastSentAt && Date.now() - lastSentAt.toMillis() < CHAT_COOLDOWN_MS) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "Slow down a little before sending another message."
+        );
+      }
+      await cooldownRef.set({ lastSentAt: FieldValue.serverTimestamp() });
+    }
+
+    const ref = await db
+      .collection("chats")
+      .doc(roomId)
+      .collection("messages")
+      .add({
+        ownerUid: uid,
+        authorRole: isStaffCaller ? "staff" : "guest",
+        name: displayName,
+        text: cleanText,
+        createdAt: FieldValue.serverTimestamp(),
+        flagged: false,
+      });
+
+    return { ok: true, id: ref.id };
+  }
+);
+
+/**
+ * Flag, unflag or delete a chat message. Coordinator and up — the same rank
+ * that reads the concierge threads, since moderating a room and staffing it
+ * are the same job.
+ */
+export const moderateChatMessage = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.coordinator) {
+      throw new HttpsError(
+        "permission-denied",
+        "You need a staff account to moderate chat."
+      );
+    }
+
+    const { roomId, messageId, action } = (request.data ?? {}) as {
+      roomId?: unknown;
+      messageId?: unknown;
+      action?: unknown;
+    };
+    assert(typeof roomId === "string" && roomId.length > 0, "roomId is required");
+    assert(
+      typeof messageId === "string" && messageId.length > 0,
+      "messageId is required"
+    );
+    assert(
+      action === "flag" || action === "unflag" || action === "delete",
+      'action must be "flag", "unflag" or "delete"'
+    );
+
+    const ref = db
+      .collection("chats")
+      .doc(roomId)
+      .collection("messages")
+      .doc(messageId);
+    const snap = await ref.get();
+    assert(snap.exists, "That message doesn't exist.");
+
+    if (action === "delete") {
+      await ref.delete();
+    } else {
+      await ref.update({ flagged: action === "flag" });
+    }
+
+    return { ok: true, roomId, messageId, action };
+  }
+);
+
+/**
+ * One vote per guest per poll, enforced without a transaction: the vote doc's
+ * id is deterministically `${pollId}_${ownerUid}`, and `.create()` throws
+ * `already-exists` if it's already there — the same trick a transaction would
+ * buy, for free, because the id collision IS the invariant.
+ */
+export const castVote = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in before voting.");
+    }
+
+    const { pollId, optionId } = (request.data ?? {}) as {
+      pollId?: unknown;
+      optionId?: unknown;
+    };
+    assert(typeof pollId === "string" && pollId.length > 0, "pollId is required");
+    assert(
+      typeof optionId === "string" && optionId.length > 0,
+      "optionId is required"
+    );
+
+    const pollSnap = await db.collection("polls").doc(pollId).get();
+    assert(pollSnap.exists, "That poll doesn't exist.");
+    assert(pollSnap.get("status") === "open", "That poll is closed.");
+
+    const options =
+      (pollSnap.get("options") as { id: string }[] | undefined) ?? [];
+    assert(
+      options.some((option) => option.id === optionId),
+      "That's not an option on this poll."
+    );
+
+    try {
+      await db
+        .collection("pollVotes")
+        .doc(`${pollId}_${uid}`)
+        .create({
+          pollId,
+          optionId,
+          ownerUid: uid,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+    } catch {
+      throw new HttpsError("already-exists", "You've already voted on this poll.");
+    }
+
+    return { ok: true };
+  }
+);
+
+/**
+ * A DJ song request. Cutoff is 1 hour before the event's real, possibly
+ * overlay-adjusted start time — read the same overlay-first-then-literal way
+ * the client does, never trusting a client-sent time — unless the couple/admin
+ * has set config/live.songRequestsOverride, which keeps every event's queue
+ * open regardless of the clock.
+ */
+export const submitSongRequest = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in before requesting a song.");
+    }
+
+    const { eventId, title, artist, note } = (request.data ?? {}) as {
+      eventId?: unknown;
+      title?: unknown;
+      artist?: unknown;
+      note?: unknown;
+    };
+    assert(
+      typeof eventId === "string" &&
+        Object.prototype.hasOwnProperty.call(EVENT_START_TIMES, eventId),
+      "eventId is not a recognised event"
+    );
+
+    const rsvpSnap = await db.collection("rsvps").doc(uid).get();
+    assert(
+      rsvpSnap.exists && rsvpSnap.get(`perEventAttendance.${eventId}`) === true,
+      "You're not attending that event."
+    );
+
+    const overlaySnap = await db.collection("config").doc("live").get();
+    const overrideStart = overlaySnap.get(`events.${eventId}.startsAt`) as
+      | string
+      | undefined;
+    const startsAtMs = Date.parse(
+      overrideStart ?? EVENT_START_TIMES[eventId as string].startsAt
+    );
+
+    const deadlineLifted = overlaySnap.get("songRequestsOverride") === true;
+    if (!deadlineLifted) {
+      assert(
+        Date.now() < startsAtMs - SONG_REQUEST_CUTOFF_MS,
+        "Song requests for this event have closed."
+      );
+    }
+
+    const ref = await db.collection("songRequests").add({
+      eventId,
+      ownerUid: uid,
+      title: cleanString(title, MAX_SONG_LEN, "title"),
+      artist: optionalString(artist, MAX_ARTIST_LEN, "artist"),
+      note: optionalString(note, MAX_NOTE_LEN, "note"),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { ok: true, id: ref.id };
+  }
+);
+
+/**
+ * Per-event shared/private toggle for uploaded photos. Admin-only
+ * (`manageAlbums`) — the couple decides that per role in
+ * src/lib/auth/roles.ts, kept in sync here.
+ */
+export const setAlbumVisibility = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.admin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an admin can change album visibility."
+      );
+    }
+
+    const { eventId, visibility } = (request.data ?? {}) as {
+      eventId?: unknown;
+      visibility?: unknown;
+    };
+    assert(
+      typeof eventId === "string" &&
+        Object.prototype.hasOwnProperty.call(EVENT_START_TIMES, eventId),
+      "eventId is not a recognised event"
+    );
+    assert(
+      typeof visibility === "string" &&
+        (ALBUM_VISIBILITIES as readonly string[]).includes(visibility),
+      'visibility must be "shared" or "private"'
+    );
+
+    await db
+      .collection("albumSettings")
+      .doc(eventId)
+      .set({
+        visibility,
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: request.auth?.uid ?? null,
+      });
+
+    return { ok: true, eventId, visibility };
+  }
+);
 
 /* -------------------------------------------------------------------------
  * The runtime overlay — config/live.
@@ -633,21 +1365,24 @@ function parseInstant(value: unknown, field: string): string {
  * mistyped a time an hour before an event.
  */
 export const updateWeddingLive = onCall(
-  { region: REGION, enforceAppCheck: false },
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     const rank = rankOf(request.auth?.token.role);
     assertSignedInStaff(rank);
 
-    const { events, schedule, emergencyContacts } = (request.data ?? {}) as {
-      events?: unknown;
-      schedule?: unknown;
-      emergencyContacts?: unknown;
-    };
+    const { events, schedule, emergencyContacts, songRequestsOverride } =
+      (request.data ?? {}) as {
+        events?: unknown;
+        schedule?: unknown;
+        emergencyContacts?: unknown;
+        songRequestsOverride?: unknown;
+      };
 
     const touchesTimes = events !== undefined || schedule !== undefined;
     const touchesContacts = emergencyContacts !== undefined;
+    const touchesSongOverride = songRequestsOverride !== undefined;
     assert(
-      touchesTimes || touchesContacts,
+      touchesTimes || touchesContacts || touchesSongOverride,
       "Nothing to update."
     );
 
@@ -657,6 +1392,15 @@ export const updateWeddingLive = onCall(
       throw new HttpsError(
         "permission-denied",
         "Only the couple can change the schedule."
+      );
+    }
+
+    // overrideSongDeadline = admin (3). Keep in sync with CAPABILITIES in
+    // src/lib/auth/roles.ts.
+    if (touchesSongOverride && rank < RANK.admin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an admin can change the song-request cutoff."
       );
     }
 
@@ -787,6 +1531,14 @@ export const updateWeddingLive = onCall(
           phone: cleanString(contact.phone, 32, `emergencyContacts[${i}].phone`),
         };
       });
+    }
+
+    if (touchesSongOverride) {
+      assert(
+        typeof songRequestsOverride === "boolean",
+        "songRequestsOverride must be a boolean"
+      );
+      update.songRequestsOverride = songRequestsOverride;
     }
 
     await db.collection("config").doc("live").set(update, { merge: true });

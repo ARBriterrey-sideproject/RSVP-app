@@ -15,12 +15,28 @@ service firebase.storage {
         : 0;
     }
 
+    function isStaff() { return roleRank() >= 1; }
+
     function isCouple() { return roleRank() >= 2; }
 
     // Per-event photo albums. The ownerUid segment is what stops guests
     // overwriting each other's uploads.
+    //
+    // `read`/`list` are couple-rank-only, NOT isStaff(): a coordinator has no
+    // blanket photo access by default — the couple opts individual staff in
+    // via the admin-only setStaffPhotoAccess callable, which grants through
+    // Firestore's staffPhotoAccess/{identity}, not through these rules. A
+    // granted coordinator therefore does NOT get direct Storage SDK access —
+    // there is no way for these rules to check that per-individual grant
+    // without a firestore.get() call we haven't verified against the
+    // Storage+Firestore emulator pairing this repo's dev workflow depends on.
+    // Instead the dashboard's listEventPhotos callable (Admin SDK, checks the
+    // grant server-side) is the read path for a granted coordinator; couple
+    // and admin keep using listAll()/getDownloadURL() directly since this
+    // rule already covers them. Revisit `read` again when a gallery viewer
+    // ships for guests, gated by albumSettings/{eventId}.visibility.
     match /photos/{eventId}/{ownerUid}/{fileId} {
-      allow read: if isSignedIn();
+      allow read, list: if isCouple();
 
       allow write: if isSignedIn()
                    && request.auth.uid == ownerUid

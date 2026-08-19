@@ -105,15 +105,20 @@ service cloud.firestore {
       allow write: if isCouple();
     }
 
-    // One vote per verified phone per poll is enforced by the compound doc id
-    // plus the callable. Reads are open to signed-in guests so results render.
+    // One vote per anonymous-auth uid per poll is enforced by the compound doc
+    // id (`{pollId}_{ownerUid}`) plus the castVote callable's `.create()`, which
+    // throws if that id already exists — no transaction needed. Reads are open
+    // to signed-in guests so results render live.
     match /pollVotes/{voteId} {
       allow read: if isSignedIn();
       allow write: if false;
     }
 
     // ---- Song requests (v2) ------------------------------------------------
-    // Cutoff is checked server-side against the event's real start time.
+    // Cutoff (1 hour before the event, or open indefinitely if the couple/admin
+    // has set config/live.songRequestsOverride) is checked server-side in the
+    // submitSongRequest callable, against the event's real, overlay-adjusted
+    // start time — never against anything the client sends.
     match /songRequests/{requestId} {
       // Whoever is running the music on the night — coordinator included.
       allow read: if isStaff();
@@ -134,10 +139,47 @@ service cloud.firestore {
       allow update, delete: if isCouple();
     }
 
+    // ---- Chat: one open group room, plus one concierge thread per guest ----
+    // roomId is either "group" (everyone attending, plus staff) or
+    // "dm_{ownerUid}" (a single guest talking to the coordinators — there is no
+    // guest-to-guest messaging by design; access here is open and anonymous,
+    // which is a fine trust model for a moderated room staff can see and a bad
+    // one for unsupervised stranger-to-stranger DMs). All writes go through
+    // sendChatMessage / moderateChatMessage so the room-targeting rule below
+    // (a guest may only address their own dm_ room) and the per-uid send
+    // cooldown are enforced somewhere the client cannot bypass.
+    match /chats/{roomId}/messages/{messageId} {
+      allow read: if roomId == "group"
+                  ? (isSignedIn() || isStaff())
+                  : (isStaff() || (isSignedIn() && roomId == "dm_" + request.auth.uid));
+      allow write: if false;
+    }
+
+    // ---- Photo album visibility (v2) ---------------------------------------
+    // One doc per event, defaulting to "private" when absent. Guests never read
+    // this — there is no in-app gallery yet, upload-only this round — so it's
+    // staff-only end to end. Written only by setAlbumVisibility.
+    match /albumSettings/{eventId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
     // ---- Staff-only aggregates --------------------------------------------
     match /aggregates/{docId} {
       allow read: if isStaff();
       allow write: if false; // written by Functions only
+    }
+
+    // ---- Per-individual photo-view grants -----------------------------------
+    // A coordinator has NO blanket photo access by default (see the tightened
+    // photos/ rule in storage.rules) — the couple grants it to specific staff
+    // one at a time via the admin-only setStaffPhotoAccess callable. Doc id is
+    // the same roster identity syncRole/getStaffRoster already key off
+    // (`email:<lowercased>` or `phone:<e164>`); presence + `allowed: true`
+    // means granted, a missing doc means not granted. Admin SDK only, same
+    // as config/live — nobody, including admin, writes this from the client.
+    match /staffPhotoAccess/{identity} {
+      allow read, write: if false;
     }
 
     // Deny anything not matched above.
