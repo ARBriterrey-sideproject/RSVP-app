@@ -11,6 +11,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { APP_NAME } from "@/content/wedding";
 import { LOCALE_TAGS, isLocale } from "@/i18n/locales";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 const parisienne = Parisienne({
@@ -104,6 +105,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           the sand background on iOS, which reads as a broken app shell. */}
       <body className="h-full overscroll-none font-sans">
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
