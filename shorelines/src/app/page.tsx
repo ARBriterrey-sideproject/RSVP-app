@@ -1,6 +1,9 @@
 import { InviteLanding } from "@/components/invite/InviteLanding";
-import { resolveTier } from "@/content/wedding";
-import { getLiveWeddingConfig } from "@/lib/wedding/live";
+import { TodayScreen } from "@/components/today/TodayScreen";
+import { songRequestsOverride as readSongRequestsOverride } from "@/content/overlay";
+import { isWeddingLive, resolveTier } from "@/content/wedding";
+import { resolveAsOf } from "@/lib/wedding/asOf";
+import { getLiveWeddingSnapshot } from "@/lib/wedding/live";
 
 /**
  * The invite link lands here — screen 1b. `?tier=` is an opaque one-letter
@@ -21,10 +24,28 @@ export default async function Home({ searchParams }: PageProps<"/">) {
    * fetch on the server: everything below this line is rendered from a plain
    * object, and the client never learns Firestore was involved.
    */
-  return (
-    <InviteLanding
-      tier={resolveTier(params.tier)}
-      config={await getLiveWeddingConfig()}
-    />
-  );
+  const { config, overlay } = await getLiveWeddingSnapshot();
+  const tier = resolveTier(params.tier);
+  const songRequestsOverride = readSongRequestsOverride(overlay);
+
+  /*
+   * `?asOf=` lets the Today screen be reached and tested before the real
+   * wedding window opens — dev-only, since a guest must never be able to fake
+   * their way into the live phase. Time still flows forward in real time from
+   * this anchor; see TodayScreen's `initialNow` prop.
+   */
+  const asOf = resolveAsOf(params.asOf);
+
+  if (isWeddingLive(config, asOf)) {
+    return (
+      <TodayScreen
+        tier={tier}
+        config={config}
+        initialNow={asOf}
+        songRequestsOverride={songRequestsOverride}
+      />
+    );
+  }
+
+  return <InviteLanding tier={tier} config={config} />;
 }
