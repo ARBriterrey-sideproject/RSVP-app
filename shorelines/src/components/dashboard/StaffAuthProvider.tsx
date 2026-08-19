@@ -35,7 +35,7 @@ export type StaffAuthState =
   | { status: "signed-out" }
   | { status: "unverified"; user: User }
   | { status: "unrostered"; user: User }
-  | { status: "ready"; user: User; role: StaffRole };
+  | { status: "ready"; user: User; role: StaffRole; photoAccess: boolean };
 
 interface StaffAuthContextValue {
   state: StaffAuthState;
@@ -70,8 +70,14 @@ export function StaffAuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // photoAccess has no token-claim equivalent (unlike role) — it's just a
+    // callable response field, so it's read straight from syncRole's return
+    // value rather than re-derived. That's fine: listEventPhotos re-checks
+    // the grant server-side on every call, so this is a UI hint only.
+    let photoAccess = false;
     try {
-      await syncRole(user);
+      const synced = await syncRole(user);
+      photoAccess = synced.photoAccess;
     } catch (error) {
       // The server refuses to grant a role to an unverified address. That's
       // not a failure to report as one — it's a state with its own screen.
@@ -88,7 +94,9 @@ export function StaffAuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const role = await readRoleFromToken(user);
-    commit(role ? { status: "ready", user, role } : { status: "unrostered", user });
+    commit(
+      role ? { status: "ready", user, role, photoAccess } : { status: "unrostered", user }
+    );
   }, []);
 
   useEffect(() => {

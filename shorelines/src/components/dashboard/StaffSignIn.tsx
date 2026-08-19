@@ -1,16 +1,21 @@
 "use client";
 
 import { FirebaseError } from "firebase/app";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ConfirmationResult } from "firebase/auth";
 import { COUPLE } from "@/content/wedding";
 import {
+  applyPersistence,
   registerWithPassword,
   sendPasswordReset,
   signInWithGoogle,
   signInWithPassword,
 } from "@/lib/firebase/staffAuth";
+import { resetVerifier, sendOtp, toE164 } from "@/lib/firebase/auth";
 
-type Mode = "signin" | "register" | "reset";
+const RECAPTCHA_CONTAINER_ID = "shorelines-staff-recaptcha";
+
+type Mode = "signin" | "register" | "reset" | "phone";
 
 const MODE_COPY: Record<Mode, { title: string; intro: string; action: string }> = {
   signin: {
@@ -28,6 +33,11 @@ const MODE_COPY: Record<Mode, { title: string; intro: string; action: string }> 
     title: "Reset password",
     intro: "We'll email you a link to set a new one.",
     action: "Send reset link",
+  },
+  phone: {
+    title: "Sign in with phone",
+    intro: "For staff who'd rather not keep a password.",
+    action: "Send code",
   },
 };
 
@@ -47,6 +57,16 @@ export function StaffSignIn() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  const [phone, setPhone] = useState("");
+  const [code, setCode] = useState("");
+  const [confirmation, setConfirmation] = useState<ConfirmationResult | null>(
+    null
+  );
+
+  // Leaving the verifier attached across an unmount fails any later retry
+  // with a stale-widget error — same reasoning as the guest flow.
+  useEffect(() => resetVerifier, []);
 
   const copy = MODE_COPY[mode];
 
@@ -78,9 +98,35 @@ export function StaffSignIn() {
         await registerWithPassword(email, password, staySignedIn);
         return; // The provider takes over and shows the "verify" screen.
       }
+      if (mode === "phone") {
+        if (!confirmation) {
+          const e164 = toE164(phone);
+          if (!e164) {
+            setError("That doesn't look like a phone number.");
+            return;
+          }
+          await applyPersistence(staySignedIn);
+          setConfirmation(await sendOtp(e164, RECAPTCHA_CONTAINER_ID));
+          return;
+        }
+        await confirmation.confirm(code.trim());
+        return; // onAuthStateChanged upstream (StaffAuthProvider) takes it from here.
+      }
       await signInWithPassword(email, password, staySignedIn);
     });
   };
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+    if (next !== "phone") {
+      resetVerifier();
+      setConfirmation(null);
+      setPhone("");
+      setCode("");
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-[420px] flex-col justify-center px-6 py-12">
@@ -95,16 +141,18 @@ export function StaffSignIn() {
       </p>
 
       <form onSubmit={onSubmit} className="mt-7 flex flex-col gap-2.5">
-        <Field
-          label="Email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-          autoComplete="email"
-          required
-        />
+        {mode !== "phone" && (
+          <Field
+            label="Email"
+            type="email"
+            value={email}
+            onChange={setEmail}
+            autoComplete="email"
+            required
+          />
+        )}
 
-        {mode !== "reset" && (
+        {mode !== "reset" && mode !== "phone" && (
           <Field
             label="Password"
             type="password"
@@ -115,6 +163,30 @@ export function StaffSignIn() {
             }
             required
             minLength={mode === "register" ? 8 : undefined}
+          />
+        )}
+
+        {mode === "phone" && !confirmation && (
+          <Field
+            label="Mobile number"
+            type="tel"
+            value={phone}
+            onChange={setPhone}
+            autoComplete="tel"
+            placeholder="98765 43210"
+            required
+          />
+        )}
+
+        {mode === "phone" && confirmation && (
+          <Field
+            label="Code"
+            type="text"
+            inputMode="numeric"
+            value={code}
+            onChange={setCode}
+            autoComplete="one-time-code"
+            required
           />
         )}
 
@@ -144,11 +216,18 @@ export function StaffSignIn() {
           disabled={busy}
           className="mt-3 w-full rounded-pill bg-coral py-4 font-sans text-[15px] font-medium text-foam transition-colors hover:bg-coral-deep disabled:opacity-60"
         >
-          {busy ? "One moment…" : copy.action}
+          {busy
+            ? "One moment…"
+            : mode === "phone" && confirmation
+              ? "Verify code"
+              : copy.action}
         </button>
+
+        {/* Invisible reCAPTCHA mounts here. Must exist before sendOtp runs. */}
+        <div id={RECAPTCHA_CONTAINER_ID} />
       </form>
 
-      {mode !== "reset" && (
+      {mode !== "reset" && mode !== "phone" && (
         <>
           <div className="my-5 flex items-center gap-3">
             <span className="h-px flex-1 bg-hairline" />
@@ -176,16 +255,19 @@ export function StaffSignIn() {
 
       <div className="mt-7 flex flex-col gap-2 font-sans text-[13px] text-driftwood-soft">
         {mode !== "signin" && (
-          <TextLink onClick={() => setMode("signin")}>
+          <TextLink onClick={() => switchMode("signin")}>
             Back to sign in
           </TextLink>
         )}
         {mode === "signin" && (
           <>
-            <TextLink onClick={() => setMode("register")}>
+            <TextLink onClick={() => switchMode("phone")}>
+              Sign in with phone instead
+            </TextLink>
+            <TextLink onClick={() => switchMode("register")}>
               First time here? Set a password
             </TextLink>
-            <TextLink onClick={() => setMode("reset")}>
+            <TextLink onClick={() => switchMode("reset")}>
               Forgotten your password?
             </TextLink>
           </>
@@ -265,6 +347,12 @@ function humanError(caught: unknown): string {
       return "Google sign-in was closed before it finished.";
     case "auth/network-request-failed":
       return "No connection. Check your network and try again.";
+    case "auth/invalid-phone-number":
+      return "That doesn't look like a phone number.";
+    case "auth/invalid-verification-code":
+      return "That code didn't match. Check it and try again.";
+    case "auth/code-expired":
+      return "That code has expired — send a new one.";
     default:
       return "Couldn't sign you in. Try again in a moment.";
   }

@@ -66,6 +66,17 @@ const CAPABILITIES = {
    * phished couple account still can't mint more admins.
    */
   manageStaff: RANK.admin,
+
+  /** Flag/delete group chat messages, and read+answer concierge threads. */
+  moderateChat: RANK.coordinator,
+  /** The song-request queue — read-only for logistics. */
+  viewSongRequests: RANK.coordinator,
+  /** Past the 1-hour cutoff, for every event, not just logistics. */
+  overrideSongDeadline: RANK.admin,
+  /** Poll authoring writes `polls/` directly — the couple's call, like the guest list itself. */
+  managePolls: RANK.couple,
+  /** Per-event shared/private toggle and browsing/deleting uploaded photos. */
+  manageAlbums: RANK.admin,
 } as const;
 
 export type Capability = keyof typeof CAPABILITIES;

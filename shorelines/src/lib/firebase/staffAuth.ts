@@ -19,13 +19,14 @@ import { isStaffRole, type StaffRole } from "@/lib/auth/roles";
 import { getFirebase } from "./client";
 
 /**
- * Sign-in for the couple and their coordinators — a wholly separate path from
- * the guests' phone OTP. Guests never touch this module and staff never touch
- * the OTP one; the only thing they share is the Firebase Auth instance.
- *
- * Email + password because the couple asked for a password, and Google because
- * it is the "auto login" in practice: one tap, nothing to remember, and the
- * address arrives already verified so the role can be granted immediately.
+ * Sign-in for the couple and their coordinators. Email + password because the
+ * couple asked for a password, Google because it is the "auto login" in
+ * practice, and — as of the phone branch below — the guests' own OTP flow
+ * reused as a third option for whoever would rather not keep a password.
+ * Reusing it doesn't merge the two identity spaces: staff who sign in this
+ * way still only get a role because `syncRole` matches their phone against
+ * `STAFF_PHONE_ROSTER` server-side (see functions/src/index.ts), the same way
+ * an email only grants one after matching `STAFF_ROSTER`.
  */
 
 /**
@@ -38,8 +39,10 @@ import { getFirebase } from "./client";
  * borrowed laptop at the venue.
  *
  * Must be set BEFORE the sign-in call or it applies only to the next session.
+ * Exported because the phone flow's sign-in call (`signInWithPhoneNumber`,
+ * fired from `sendOtp` in `./auth`) lives outside this module.
  */
-async function applyPersistence(staySignedIn: boolean) {
+export async function applyPersistence(staySignedIn: boolean) {
   const { auth } = getFirebase();
   await setPersistence(
     auth,
@@ -125,21 +128,30 @@ export async function signOutStaff(): Promise<void> {
  *     already issued. Without this the new role is invisible to Firestore rules
  *     for up to an hour, and the couple would have to sign out and back in.
  */
-export async function syncRole(user: User): Promise<StaffRole | null> {
+export interface SyncedRole {
+  role: StaffRole | null;
+  /** Whether this account can view photos — by rank (couple+) or an individual grant. */
+  photoAccess: boolean;
+}
+
+export async function syncRole(user: User): Promise<SyncedRole> {
   const { functions } = getFirebase();
 
   await user.reload();
   await user.getIdToken(true);
 
-  const call = httpsCallable<undefined, { role: string | null; changed: boolean }>(
-    functions,
-    "syncRole"
-  );
+  const call = httpsCallable<
+    undefined,
+    { role: string | null; changed: boolean; photoAccess: boolean }
+  >(functions, "syncRole");
   const { data } = await call();
 
   if (data.changed) await user.getIdToken(true);
 
-  return isStaffRole(data.role) ? data.role : null;
+  return {
+    role: isStaffRole(data.role) ? data.role : null,
+    photoAccess: data.photoAccess,
+  };
 }
 
 /**
