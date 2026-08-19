@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+defaults:
+  run:
+    working-directory: shorelines
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: shorelines/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  emulator-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: shorelines/package-lock.json
+      - run: npm ci
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: shorelines/functions/package-lock.json
+      - run: npm ci
+        working-directory: shorelines/functions
+      - run: npm run build
+        working-directory: shorelines/functions
+
+      # STAFF_ROSTER / STAFF_PHONE_ROSTER: emulator-only, gitignored locally
+      # (functions/.env.local, see CLAUDE.md) — this recreates just the
+      # fixture entries tests/functions/callables.test.ts actually asserts
+      # against (coordinator@example.com -> coordinator, +919876543210 ->
+      # admin), not the developer's real roster.
+      - name: Write emulator-only staff roster fixture
+        working-directory: shorelines/functions
+        run: |
+          cat > .env.local <<'EOF'
+          STAFF_ROSTER={"coordinator@example.com":"coordinator","couple@example.com":"couple","admin@example.com":"admin"}
+          STAFF_PHONE_ROSTER={"+919876543210":"admin"}
+          EOF
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Rules + callable tests against emulators
+        run: |
+          firebase emulators:exec \
+            --project demo-shorelines \
+            --only auth,firestore,functions,storage \
+            "npm run test:rules && npm run test:functions"
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests against emulators
+        run: |
+          firebase emulators:exec \
+            --project demo-shorelines \
+            --only auth,firestore,functions,storage \
+            "npm run test:e2e"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: shorelines/playwright-report/
+          retention-days: 7
