@@ -5,8 +5,18 @@ import { COUPLE } from "@/content/wedding";
 import type { WeddingConfig, WeddingOverlay } from "@/content/schema";
 import { ROLE_COPY, type Capability } from "@/lib/auth/roles";
 import { EmergencyContactsPanel } from "./EmergencyContactsPanel";
+import { InviteLinksPanel } from "./InviteLinksPanel";
+import { LiveChatPanel } from "./LiveChatPanel";
+import { MemoriesPanel } from "./MemoriesPanel";
+import { PhotoAlbumsPanel } from "./PhotoAlbumsPanel";
+import { PollsPanel } from "./PollsPanel";
+import { RepliesPanel } from "./RepliesPanel";
 import { SchedulePanel } from "./SchedulePanel";
+import { SongRequestsPanel } from "./SongRequestsPanel";
+import { SpeakeasyPanel } from "./SpeakeasyPanel";
+import { StaffAccessPanel } from "./StaffAccessPanel";
 import { useStaffAuth } from "./StaffAuthProvider";
+import { TravelPanel } from "./TravelPanel";
 
 /**
  * The shell the panels hang off. Everything below is gated by capability rather
@@ -33,16 +43,19 @@ const PANELS: {
     capability: "viewResponses",
     title: "Replies",
     description: "Who's coming, headcounts, veg and non-veg splits per event.",
+    render: () => <RepliesPanel />,
   },
   {
     capability: "viewContactDetails",
     title: "Travel & pickups",
     description: "Arrivals, departures, flight and train numbers, car requests.",
+    render: () => <TravelPanel />,
   },
   {
     capability: "copyInviteLinks",
     title: "Invite links",
     description: "Copy the three tier links to paste into WhatsApp.",
+    render: () => <InviteLinksPanel />,
   },
   {
     capability: "editEmergencyContacts",
@@ -56,11 +69,13 @@ const PANELS: {
     capability: "grantSpeakeasy",
     title: "The speakeasy",
     description: "Choose who gets asked. Nobody sees it until you add them.",
+    render: () => <SpeakeasyPanel />,
   },
   {
     capability: "viewMemories",
     title: "Messages to you",
-    description: "Notes and voice memos guests leave. Only the two of you.",
+    description: "Notes guests leave. Only the two of you.",
+    render: () => <MemoriesPanel />,
   },
   {
     capability: "editSchedule",
@@ -72,6 +87,33 @@ const PANELS: {
     capability: "manageStaff",
     title: "Staff access",
     description: "Who can sign in here, and as what.",
+    render: () => <StaffAccessPanel />,
+  },
+  {
+    capability: "moderateChat",
+    title: "Live chat",
+    description: "The group room, plus every guest's private thread with you.",
+    render: () => <LiveChatPanel />,
+  },
+  {
+    capability: "managePolls",
+    title: "Polls",
+    description: "Ask the room something. Watch the answers come in live.",
+    render: ({ config }) => <PollsPanel config={config} />,
+  },
+  {
+    capability: "viewSongRequests",
+    title: "Song requests",
+    description: "What the DJ's been asked to play, grouped by event.",
+    render: ({ config, overlay }) => (
+      <SongRequestsPanel config={config} overlay={overlay} />
+    ),
+  },
+  {
+    capability: "manageAlbums",
+    title: "Photo albums",
+    description: "Toggle shared vs. private per event, and browse uploads.",
+    render: ({ config }) => <PhotoAlbumsPanel config={config} canManage />,
   },
 ];
 
@@ -81,8 +123,28 @@ export function DashboardHome({ config, overlay }: PanelContext) {
 
   if (state.status !== "ready") return null;
 
-  const { user, role } = state;
+  const { user, role, photoAccess } = state;
   const visible = PANELS.filter((panel) => allows(panel.capability));
+
+  // A coordinator with no `manageAlbums` rank still gets a read-only "Photo
+  // albums" entry when the admin has granted them individual photo access
+  // (see setStaffPhotoAccess) — manageAlbums stays admin-only for the
+  // toggle/delete controls, this is a separate per-individual grant with its
+  // own view-only panel.
+  const panels =
+    !allows("manageAlbums") && photoAccess
+      ? [
+          ...visible,
+          {
+            capability: "manageAlbums" as const,
+            title: "Photo albums",
+            description: "Browse what guests have uploaded, per event.",
+            render: ({ config }: PanelContext) => (
+              <PhotoAlbumsPanel config={config} canManage={false} />
+            ),
+          },
+        ]
+      : visible;
 
   return (
     <main className="mx-auto w-full max-w-[560px] px-6 py-10">
@@ -114,7 +176,7 @@ export function DashboardHome({ config, overlay }: PanelContext) {
       </div>
 
       <ul className="mt-6 flex flex-col gap-2.5">
-        {visible.map((panel) => {
+        {panels.map((panel) => {
           const expanded = open === panel.capability;
           const built = Boolean(panel.render);
 
@@ -156,7 +218,7 @@ export function DashboardHome({ config, overlay }: PanelContext) {
       </ul>
 
       <p className="mt-6 font-sans text-xs leading-relaxed text-driftwood-faint">
-        You&apos;re seeing {visible.length} of {PANELS.length} sections. The rest
+        You&apos;re seeing {panels.length} of {PANELS.length} sections. The rest
         are for other roles.
       </p>
     </main>
