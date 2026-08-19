@@ -23,6 +23,22 @@ export const LOCALE_NAMES: Record<Locale, string> = {
 };
 
 /**
+ * A two-letter-equivalent abbreviation for the collapsed switcher trigger, in
+ * each language's own script — hand-picked, not sliced. A naive `.slice(0, 2)`
+ * on a Devanagari/Kannada/Odia string can split a base letter from its own
+ * combining vowel sign or nukta mid-grapheme; these were checked against
+ * `Intl.Segmenter`'s actual grapheme-cluster boundaries for each name above.
+ * "or" additionally trims the vowel sign off the second cluster, which is
+ * still a well-formed standalone akshara on its own, not a broken half-glyph.
+ */
+export const LOCALE_SHORT: Record<Locale, string> = {
+  en: "EN",
+  hi: "हि",
+  kn: "ಕನ್",
+  or: "ଓଡ଼",
+};
+
+/**
  * The `lang` attribute and the BCP-47 tag used for date and number formatting.
  * `en-IN` rather than `en-US` on purpose: the wedding is in Odisha, so a date
  * should format as 28/12/2026, not 12/28/2026.

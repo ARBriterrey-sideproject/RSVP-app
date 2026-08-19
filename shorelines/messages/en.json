@@ -11,6 +11,126 @@
     "description": "Barefoot on the same stretch of sand."
   },
   "wedding": {},
+  "nav": {
+    "today": "Today",
+    "schedule": "Schedule",
+    "rsvp": "RSVP",
+    "chat": "Chat",
+    "photos": "Photos"
+  },
+  "eventLocked": {
+    "title": "Not open yet",
+    "body": "This opens once the wedding weekend begins.",
+    "cta": "Back to the invite"
+  },
+  "chat": {
+    "title": "Chat",
+    "tabEveryone": "Everyone",
+    "tabConcierge": "Message the coordinators",
+    "emptyGroup": "No messages yet — say hello.",
+    "emptyConcierge": "Message the coordinators directly — only they can see this.",
+    "staffBadge": "coordinator",
+    "placeholderGroup": "Message everyone",
+    "placeholderConcierge": "Message the coordinators",
+    "send": "Send",
+    "sendFailed": "That didn’t send. Try again."
+  },
+  "memories": {
+    "back": "Back",
+    "title": "Leave a message",
+    "intro": "A private note for the two of us. We won’t reply here, but we’ll read every one.",
+    "empty": "Write whatever you’d like us to know.",
+    "placeholder": "Write your message",
+    "send": "Send",
+    "sendFailed": "That didn’t send. Try again."
+  },
+  "polls": {
+    "back": "Back",
+    "title": "Polls",
+    "empty": "No polls yet — check back soon.",
+    "closed": "Closed",
+    "closedSection": "Closed polls",
+    "voteCount": "{count, plural, =0 {No votes yet} =1 {1 vote} other {# votes}}",
+    "voteFailed": "That didn’t send. Try again."
+  },
+  "photos": {
+    "title": "Photos",
+    "intro": "Add a photo to the event's album — the couple will see it.",
+    "noEvents": "No events open for uploads yet.",
+    "uploadFor": "Upload to {event}",
+    "choosePhoto": "Choose a photo",
+    "sent": "Added — thank you!",
+    "sendFailed": "That didn’t upload. Try again.",
+    "sharedCount": "{count, plural, =1 {1 photo shared so far} other {# photos shared so far}}"
+  },
+  "schedule": {
+    "title": "The schedule",
+    "subtitle": "All times {tz} · {region}",
+    "mainEvent": "The main event",
+    "signOff": "safe travels home"
+  },
+  "today": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "greetingWithName": "{greeting}, {name}",
+    "summary": "{count, plural, =0 {Nothing on today's schedule — rest up.} =1 {One thing today. {first} at {firstTime}.} other {{count} things today. {first} at {firstTime}, then {last}.}}",
+    "upNext": "Up next",
+    "fromNow": "from now",
+    "getDirections": "Get directions",
+    "shuttleTimes": "Shuttle times",
+    "countdown": {
+      "days": "{d, plural, =1 {1 day} other {# days}}",
+      "hours": "{h, plural, =1 {1 hour} other {# hours}}",
+      "minutes": "{m, plural, =1 {1 minute} other {# minutes}}"
+    },
+    "weather": {
+      "condition": {
+        "clear": "Sunny",
+        "cloudy": "Cloudy",
+        "rain": "Rainy",
+        "storm": "Stormy",
+        "other": "Mild"
+      },
+      "feelsLike": "Feels like",
+      "sunset": "Sunset",
+      "seaBreeze": "Sea breeze"
+    },
+    "dressCode": {
+      "title": "Today's dress code",
+      "fullGuide": "Full guide",
+      "footnote": "Skip heels — most of it is on sand."
+    },
+    "laterToday": "Later today",
+    "signOff": {
+      "before": "{days, plural, =1 {one day to go} other {# days to go}}",
+      "after": "married"
+    },
+    "memories": {
+      "title": "Leave a message",
+      "body": "A private note for the two of us — we'll read every one.",
+      "cta": "Write one"
+    },
+    "polls": {
+      "title": "Ongoing polls",
+      "cta": "Vote now"
+    },
+    "songRequests": {
+      "title": "Song requests",
+      "body": "Tell the DJ what to play at {event}.",
+      "cta": "Request a song",
+      "overrideNote": "Normally closed by now — open a little longer tonight.",
+      "titleLabel": "Song title",
+      "artistLabel": "Artist (optional)",
+      "noteLabel": "Note for the DJ (optional)",
+      "submit": "Send request",
+      "submitting": "Sending…",
+      "sendFailed": "That didn’t send. Try again.",
+      "sent": "Sent — thanks!"
+    }
+  },
   "landing": {
     "saveTheDate": "Save the date",
     "scroll": "Scroll",
@@ -32,6 +152,7 @@
     "title": "RSVP",
     "back": "Back",
     "progress": "RSVP progress",
+    "loading": "One moment…",
     "cta": {
       "sendCode": "Send code",
       "verify": "Verify",
@@ -42,20 +163,8 @@
     },
     "errors": {
       "badNumber": "Enter a valid mobile number, or include the country code.",
-      "otpSendFailed": "Could not send the code.",
-      "otpMismatch": "That code didn’t match. Check it and try again.",
       "nameRequired": "Add your name so we know whose reply this is.",
       "saveFailed": "We couldn’t save that."
-    },
-    "identity": {
-      "title": "Is this you?",
-      "intro": "Your number is how we find your reply again — no passwords, no account to make.",
-      "phoneLabel": "Mobile number",
-      "countryCodeHint": "Outside India? Add your country code, like +44.",
-      "codeTitle": "Check your phone",
-      "codeIntro": "We sent a six-digit code to {phone}. It keeps your reply yours — and lets you come back and change it.",
-      "codeLabel": "Six digit code",
-      "useAnotherNumber": "Use a different number"
     },
     "days": {
       "title": "Which days?",
@@ -67,6 +176,8 @@
       "intro": "Add everyone travelling under your invitation.",
       "primaryGuest": "Primary guest",
       "yourName": "Your full name",
+      "phoneLabel": "Mobile number (optional)",
+      "phoneHint": "Only if you’d like us to reach you directly — not required.",
       "addNames": "Add their names now",
       "namesLater": "I’ll add names later",
       "footnote": "Party of {count}. You can change this until {date}.",
@@ -133,6 +244,18 @@
       "copied": "Link copied",
       "preparing": "Preparing your code",
       "qrAlt": "QR code opening the {partnerA} and {partnerB} invitation"
+    },
+    "recovery": {
+      "title": "Your way back in",
+      "body": "Save this link to come back and change your reply from another device — there’s no password behind it, so this link is the only way back.",
+      "copy": "Copy the link",
+      "copied": "Link copied"
+    },
+    "install": {
+      "title": "Keep it on your home screen",
+      "body": "Add this to your home screen so the schedule and your reply are one tap away, even offline.",
+      "iosBody": "Tap the Share icon in Safari, then \"Add to Home Screen\".",
+      "cta": "Add to home screen"
     }
   },
   "shared": {
