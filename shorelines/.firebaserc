@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-shorelines"
+    "default": "demo-shorelines",
+    "prod": "shorelines-rsvp-app"
   }
 }
