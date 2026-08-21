@@ -9,7 +9,7 @@ import {
 } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
-import { APP_NAME } from "@/content/wedding";
+import { COUPLE } from "@/content/wedding";
 import { LOCALE_TAGS, isLocale } from "@/i18n/locales";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
@@ -61,20 +61,49 @@ const notoOriya = Noto_Sans_Oriya({
   display: "swap",
 });
 
+const SITE_URL = "https://amrutashubham.com";
+
 /**
  * Generated rather than static so the share preview a guest gets when they
  * forward the link is in their own language — for WhatsApp-first distribution
  * that snippet is often the first thing anyone reads.
  *
- * The title is the one part that isn't translated: it's the app's own name, a
- * proper noun in all four languages, and it comes from the config so a
- * different couple's build renames every tab without touching a catalogue. It
- * used to be repeated as `meta.title` in all four files, which is four places
- * to miss.
+ * The title is built from the couple's names, not `APP_NAME` — "Shorelines"
+ * is this build's internal project name, not something a guest or a search
+ * result should show. Names are proper nouns and stay untranslated in all
+ * four languages, same reasoning as `APP_NAME` used to get. It comes from the
+ * config so a different couple's build retitles every tab without touching a
+ * catalogue.
+ *
+ * `metadataBase` + explicit `robots`/`openGraph` exist because the bare
+ * domain had nothing for a crawler to key off before this — just the
+ * internal project name and a two-line tagline — which is why Google's first
+ * pass rendered it as a generic parked-domain snippet.
  */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
-  return { title: APP_NAME, description: t("description") };
+  const title = `${COUPLE.partnerB} & ${COUPLE.partnerA}'s Wedding`;
+  const description = t("description");
+
+  return {
+    metadataBase: new URL(SITE_URL),
+    title,
+    description,
+    robots: { index: true, follow: true },
+    alternates: { canonical: "/" },
+    openGraph: {
+      title,
+      description,
+      url: "/",
+      siteName: title,
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+    },
+  };
 }
 
 export const viewport: Viewport = {
