@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import { AppShell } from "@/components/layout/AppShell";
 import { getFirebase } from "@/lib/firebase/client";
 import { sendMemory } from "@/lib/firebase/memories";
 import { tierCode, type Tier } from "@/content/wedding";
@@ -64,7 +65,7 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
   }
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell>
       <header className="flex-none px-6 pt-8 pb-3">
         <Link
           href={`/?tier=${tierCode(tier)}`}
@@ -89,7 +90,7 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
         ) : null}
         {sent.map((message) => (
           <div key={message.id} className="flex justify-end">
-            <div className="max-w-[80%] rounded-2xl bg-deeptide px-4 py-2 text-sm text-sand">
+            <div className="max-w-[80%] rounded-2xl bg-deeptide px-4 py-2 text-sm text-sand md:max-w-sm">
               <p className="whitespace-pre-wrap">{message.text}</p>
             </div>
           </div>
@@ -97,7 +98,7 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
       </div>
 
       <div
-        className="mx-auto w-full max-w-md flex-none bg-sand/[0.96] px-4 pt-2 backdrop-blur-md"
+        className="mx-auto w-full max-w-md flex-none bg-sand/[0.96] px-4 pt-2 backdrop-blur-md md:max-w-shell-wide"
         style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         {error ? <p className="mb-1.5 px-1 text-xs text-coral-ink">{error}</p> : null}
@@ -125,6 +126,6 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
           </button>
         </div>
       </div>
-    </div>
+    </AppShell>
   );
 }

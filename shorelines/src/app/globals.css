@@ -68,6 +68,10 @@
   /* Radii — 1c uses 16px cards and full-round pills */
   --radius-card: 16px;
   --radius-pill: 999px;
+
+  /* Layout — the guest app-shell's width cap on wide viewports (graceful
+     widen, not a desktop redesign): see AppShell.tsx. */
+  --container-shell-wide: 42rem;
 }
 
 /*

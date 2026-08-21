@@ -130,7 +130,7 @@ function EventAlbum({
             No uploads yet.
           </p>
         ) : (
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-2 md:grid-cols-5">
             {photos.map((photo) => (
               <div key={photo.fullPath} className="group relative aspect-square">
                 <a href={photo.url} target="_blank" rel="noreferrer">

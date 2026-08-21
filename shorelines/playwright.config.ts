@@ -33,10 +33,19 @@ export default defineConfig({
   // CLAUDE.md's "Known-benign emulator noise" section) and this suite never
   // touches that locale, but it's worth remembering if a spec is ever added
   // that does.
+  //
+  // Two projects, same spec files: the golden-path suite asserts on behavior,
+  // not layout, so running it at a phone viewport too costs nothing and
+  // catches a regression the desktop-only default has never once exercised
+  // (see the mobile-first-to-desktop plan's risk #3).
   projects: [
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      name: "mobile-chromium",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 375, height: 812 } },
     },
   ],
   webServer: {

@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { onSnapshot } from "firebase/firestore";
+import { AppShell } from "@/components/layout/AppShell";
 import { getFirebase } from "@/lib/firebase/client";
 import {
   castVote,
@@ -165,7 +166,7 @@ export function PollsScreen({ tier }: { tier: Tier }) {
   );
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell>
       <header className="flex-none px-6 pt-8 pb-3">
         <Link
           href={`/?tier=${tierCode(tier)}`}
@@ -202,6 +203,6 @@ export function PollsScreen({ tier }: { tier: Tier }) {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }

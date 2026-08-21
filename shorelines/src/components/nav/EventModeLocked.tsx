@@ -16,7 +16,8 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { BOTTOM_TAB_BAR_HEIGHT, BottomTabBar, type Tab } from "./BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
+import { BOTTOM_TAB_BAR_HEIGHT, type Tab } from "./BottomTabBar";
 import { tierCode, type Tier } from "@/content/wedding";
 
 export function EventModeLocked({
@@ -29,7 +30,7 @@ export function EventModeLocked({
   const t = useTranslations("eventLocked");
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell tab={activeTab} tier={tier} live={false}>
       <div
         className="flex flex-1 flex-col items-center justify-center px-8 text-center"
         style={{
@@ -47,8 +48,6 @@ export function EventModeLocked({
           {t("cta")}
         </Link>
       </div>
-
-      {activeTab ? <BottomTabBar active={activeTab} tier={tier} live={false} /> : null}
-    </div>
+    </AppShell>
   );
 }

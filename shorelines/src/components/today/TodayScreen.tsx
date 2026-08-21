@@ -48,10 +48,8 @@ import {
   type WeddingEvent,
 } from "@/content/wedding";
 import { eventCopy, scheduleCopy, type Lookup } from "@/i18n/weddingCopy";
-import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BottomTabBar,
-} from "@/components/nav/BottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/components/nav/BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { Palm } from "@/components/motifs";
 import { ScallopEdge } from "@/components/rsvp/ui";
 
@@ -532,7 +530,7 @@ export function TodayScreen({
     : 0;
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell tab="today" tier={effectiveTier}>
       <div
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
@@ -552,7 +550,7 @@ export function TodayScreen({
                 ? t("greetingWithName", { greeting: t(`greeting.${period}`), name: guestName })
                 : t(`greeting.${period}`)}
             </p>
-            <p className="mt-2.5 max-w-[270px] font-sans text-[13.5px] leading-[1.6] text-foam/90">
+            <p className="mt-2.5 max-w-[270px] font-sans text-[13.5px] leading-[1.6] text-foam/90 md:max-w-[420px]">
               {summary}
             </p>
           </div>
@@ -748,8 +746,6 @@ export function TodayScreen({
           </p>
         </div>
       </div>
-
-      <BottomTabBar active="today" tier={effectiveTier} />
-    </div>
+    </AppShell>
   );
 }

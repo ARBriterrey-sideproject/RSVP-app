@@ -246,7 +246,7 @@ export function SharedInvite({
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand">
+    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand md:max-w-shell-wide">
       {children}
     </main>
   );

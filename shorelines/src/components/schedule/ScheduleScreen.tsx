@@ -36,10 +36,8 @@ import {
 import type { PrivateEvent } from "@/content/schema";
 import { myPrivateEvents } from "@/lib/firebase/privateEvents";
 import { eventCopy, scheduleCopy, type Lookup } from "@/i18n/weddingCopy";
-import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BottomTabBar,
-} from "@/components/nav/BottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/components/nav/BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { SingleWave } from "@/components/motifs";
 
 function timeParts(iso: string, locale: string, timeZone: string) {
@@ -458,7 +456,7 @@ export function ScheduleScreen({
   }, [locale, timeZone]);
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell tab="schedule" tier={effectiveTier} live={live}>
       <header className="flex-none px-6 pb-4 pt-[max(28px,env(safe-area-inset-top))]">
         <h1 className="font-display text-[36px] leading-none text-deeptide">
           {t("title")}
@@ -540,8 +538,6 @@ export function ScheduleScreen({
           />
         )}
       </div>
-
-      <BottomTabBar active="schedule" tier={effectiveTier} live={live} />
-    </div>
+    </AppShell>
   );
 }

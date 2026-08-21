@@ -58,7 +58,7 @@ export async function InviteLanding({
   const tag = await localeTag();
 
   return (
-    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand">
+    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand md:max-w-shell-wide">
       <Curtain />
       <Hero />
 
@@ -182,7 +182,7 @@ async function Curtain() {
   return (
     <div
       aria-hidden
-      className="animate-curtain pointer-events-none fixed inset-0 z-20 mx-auto flex max-w-md items-center justify-center overflow-hidden bg-sunbleach"
+      className="animate-curtain pointer-events-none fixed inset-0 z-20 mx-auto flex max-w-md items-center justify-center overflow-hidden bg-sunbleach md:max-w-shell-wide"
     >
       <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_40%,rgba(255,255,255,0.7),transparent_70%)]" />
 

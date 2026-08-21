@@ -12,10 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BottomTabBar,
-} from "@/components/nav/BottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/components/nav/BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { getFirebase } from "@/lib/firebase/client";
 import {
   chatMessagesQuery,
@@ -66,7 +64,7 @@ export function ChatScreen({ tier }: { tier: Tier }) {
   }
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell tab="chat" tier={tier}>
       <header className="flex-none px-6 pt-8 pb-3">
         <h1 className="font-serif text-2xl text-deeptide">{t("title")}</h1>
         <div className="mt-4 flex gap-2 rounded-full bg-driftwood/[0.06] p-1">
@@ -111,7 +109,7 @@ export function ChatScreen({ tier }: { tier: Tier }) {
       )}
 
       <div
-        className="fixed inset-x-0 z-30 mx-auto w-full max-w-md bg-sand/[0.96] px-4 pt-2 backdrop-blur-md"
+        className="fixed inset-x-0 z-30 mx-auto w-full max-w-md bg-sand/[0.96] px-4 pt-2 backdrop-blur-md md:max-w-shell-wide"
         style={{
           bottom: BOTTOM_TAB_BAR_HEIGHT,
           paddingBottom: "max(8px, env(safe-area-inset-bottom))",
@@ -144,9 +142,7 @@ export function ChatScreen({ tier }: { tier: Tier }) {
           </button>
         </div>
       </div>
-
-      <BottomTabBar active="chat" tier={tier} />
-    </div>
+    </AppShell>
   );
 }
 
@@ -198,7 +194,7 @@ function ChatMessageList({
             className={`flex ${mine ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+              className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm md:max-w-sm ${
                 mine
                   ? "bg-deeptide text-sand"
                   : message.authorRole === "staff"

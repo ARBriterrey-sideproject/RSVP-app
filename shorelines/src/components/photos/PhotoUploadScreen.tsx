@@ -18,10 +18,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { onAuthStateChanged, signInAnonymously } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BottomTabBar,
-} from "@/components/nav/BottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/components/nav/BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { getFirebase } from "@/lib/firebase/client";
 import { uploadPhoto } from "@/lib/firebase/photos";
 import { eventsForTier, isTier, type Tier } from "@/content/wedding";
@@ -105,7 +103,7 @@ export function PhotoUploadScreen({ tier }: { tier: Tier }) {
   }
 
   return (
-    <div className="relative mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-sand">
+    <AppShell tab="photos" tier={effectiveTier}>
       <header className="flex-none px-6 pt-8 pb-3">
         <h1 className="font-serif text-2xl text-deeptide">{t("title")}</h1>
         <p className="mt-1 font-sans text-[13px] leading-snug text-driftwood-soft">
@@ -189,8 +187,6 @@ export function PhotoUploadScreen({ tier }: { tier: Tier }) {
           </>
         )}
       </div>
-
-      <BottomTabBar active="photos" tier={effectiveTier} />
-    </div>
+    </AppShell>
   );
 }

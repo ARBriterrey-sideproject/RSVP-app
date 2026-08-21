@@ -129,7 +129,7 @@ export function RepliesPanel() {
         <p className="mt-3 font-sans text-[13px] text-coral-ink">{error}</p>
       ) : null}
 
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
         {EVENTS.map((event) => {
           const s = stats.get(event.id);
           return (

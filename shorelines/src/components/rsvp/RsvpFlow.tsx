@@ -32,10 +32,8 @@ import {
   type Travel,
 } from "./types";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import {
-  BOTTOM_TAB_BAR_HEIGHT,
-  BottomTabBar,
-} from "@/components/nav/BottomTabBar";
+import { BOTTOM_TAB_BAR_HEIGHT } from "@/components/nav/BottomTabBar";
+import { AppShell } from "@/components/layout/AppShell";
 import { override } from "@/i18n/weddingCopy";
 import { StepDays } from "./steps/StepDays";
 import { StepDone } from "./steps/StepDone";
@@ -337,7 +335,7 @@ export function RsvpFlow({
   })();
 
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-sand">
+    <AppShell tab={screen === "done" ? "rsvp" : undefined} tier={effectiveTier} live={live}>
       {screen !== "done" && screen !== "loading" && (
         <header className="flex-none px-6 pt-4 pb-4">
           <div className="flex items-center justify-between">
@@ -501,13 +499,6 @@ export function RsvpFlow({
           </button>
         </div>
       )}
-
-      {/* Only once there's a saved reply to leave — the wizard steps keep
-          RsvpFlow's own sticky CTA as the one thing at the bottom, same as
-          BottomTabBar's own doc comment says. */}
-      {screen === "done" && (
-        <BottomTabBar active="rsvp" tier={effectiveTier} live={live} />
-      )}
-    </div>
+    </AppShell>
   );
 }

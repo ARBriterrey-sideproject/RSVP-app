@@ -156,32 +156,62 @@ export function BottomTabBar({
 }) {
   const t = useTranslations("nav");
   const visibleTabs = TABS.filter((tab) => live || !tab.eventOnly);
+  const label = visibleTabs.map(({ id }) => t(id)).join(" / ");
 
   return (
-    <nav
-      aria-label={visibleTabs.map(({ id }) => t(id)).join(" / ")}
-      className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md items-center border-t border-driftwood/[0.08] bg-sand/[0.94] px-2 pt-2 backdrop-blur-md"
-      style={{
-        height: BOTTOM_TAB_BAR_HEIGHT,
-        paddingBottom: "max(12px, env(safe-area-inset-bottom))",
-      }}
-    >
-      {visibleTabs.map(({ id, Icon, href }) => {
-        const isActive = id === active;
-        return (
-          <Link
-            key={id}
-            href={href(tier)}
-            aria-current={isActive ? "page" : undefined}
-            className={`flex-1 text-center font-sans text-[10.5px] leading-[1.6] font-medium tracking-[0.1em] uppercase transition-colors ${
-              isActive ? "text-deeptide" : "text-driftwood-faint"
-            }`}
-          >
-            <Icon active={isActive} />
-            {t(id)}
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      {/* Desktop: a slim top nav in normal flow, not fixed — AppShell places
+          this ahead of `children` so it lands at the top of the column. */}
+      <nav
+        aria-label={label}
+        className="hidden flex-none items-center justify-center gap-1 border-b border-driftwood/[0.08] bg-sand px-4 py-3 md:flex"
+      >
+        {visibleTabs.map(({ id, Icon, href }) => {
+          const isActive = id === active;
+          return (
+            <Link
+              key={id}
+              href={href(tier)}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-sans text-[12px] font-medium tracking-[0.08em] uppercase transition-colors ${
+                isActive
+                  ? "bg-deeptide/[0.08] text-deeptide"
+                  : "text-driftwood-faint hover:text-driftwood"
+              }`}
+            >
+              <Icon active={isActive} />
+              <span>{t(id)}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Mobile: the original fixed-to-viewport bottom bar, unchanged. */}
+      <nav
+        aria-label={label}
+        className="fixed inset-x-0 bottom-0 z-20 mx-auto flex w-full max-w-md items-center border-t border-driftwood/[0.08] bg-sand/[0.94] px-2 pt-2 backdrop-blur-md md:hidden"
+        style={{
+          height: BOTTOM_TAB_BAR_HEIGHT,
+          paddingBottom: "max(12px, env(safe-area-inset-bottom))",
+        }}
+      >
+        {visibleTabs.map(({ id, Icon, href }) => {
+          const isActive = id === active;
+          return (
+            <Link
+              key={id}
+              href={href(tier)}
+              aria-current={isActive ? "page" : undefined}
+              className={`flex-1 text-center font-sans text-[10.5px] leading-[1.6] font-medium tracking-[0.1em] uppercase transition-colors ${
+                isActive ? "text-deeptide" : "text-driftwood-faint"
+              }`}
+            >
+              <Icon active={isActive} />
+              {t(id)}
+            </Link>
+          );
+        })}
+      </nav>
+    </>
   );
 }
