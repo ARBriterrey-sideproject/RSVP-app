@@ -82,7 +82,7 @@ Unlike every other capability, blanket photo access stops at `couple` — a coor
 - **`setStaffPhotoAccess({ kind, value, allowed })`** — admin rank only. Writes or deletes the grant doc. Couple and admin identities never need an entry: they already pass the rank check below, so a grant for one of them is accepted but simply never read.
 - **`listEventPhotos({ eventId })`** — replaces direct Storage SDK listing for the dashboard. Coordinator rank is the floor; below `couple`, it additionally requires a live `staffPhotoAccess` grant for the caller's own identity, checked server-side on every call. This is why a granted coordinator can browse photos through the dashboard even though `storage.rules`' `photos/` read stays `isCouple()`-only — the callable uses the Admin SDK and bypasses Storage rules entirely, which is also why the grant can't be checked inside the Storage rules themselves (no `firestore.get()` cross-service read verified against the Storage+Firestore emulator pairing this repo depends on).
 - **`syncRole` and `getStaffRoster` both grew a `photoAccess` field** — a boolean for the caller (`syncRole`, used to decide whether their dashboard shows a read-only Photo albums panel) or a full `identity -> boolean` map (`getStaffRoster`, used to render the toggle in the Staff access panel). Either is a UI-visibility hint only; `listEventPhotos` re-derives and re-checks the grant itself regardless of what the client believes.
-- **The Staff access panel** now has one live control per coordinator row — "Granted" / "Not granted" — wired straight to `setStaffPhotoAccess`. This is the one exception to that panel's own "read-only, edit via roster secret" rule (see below): a photo grant lives in Firestore, not an env var, so there's no bootstrap problem in editing it from a form the way there would be for a role.
+- **The Staff access panel** now has one live control per coordinator row — "Granted" / "Not granted" — wired straight to `setStaffPhotoAccess`. It sits beside the role controls on the same rows, and works on env-roster rows too — a photo grant lives in `staffPhotoAccess`, not in the roster secret, so it's editable regardless of which authority the role itself came from.
 
 **`moderateChat`, `viewSongRequests` and `managePolls` — same rank as their nearest existing analogue.** Chat moderation sits with `viewContactDetails` at coordinator rank: a coordinator already reads guest phone numbers to arrange cars, so reading and flagging chat messages isn't a bigger trust step. `viewSongRequests` is coordinator for the same reason — whoever is running the music on the night needs the queue, and that's frequently a coordinator, not the couple. `managePolls` sits at couple rank because creating and closing a poll is closer to `editSchedule` than to logistics — it's the couple/admin's voice going out to every guest, not a coordinator's.
 
@@ -90,24 +90,62 @@ Unlike every other capability, blanket photo access stops at `couple` — a coor
 
 ## How a role is granted
 
-**From a server-side roster, not the database.** `STAFF_ROSTER` is a JSON environment variable mapping email → role:
+**Two authorities, checked in that order: the deploy-time env roster, then an admin's approval.**
+
+### 1. The env roster — break-glass only
+
+`STAFF_ROSTER` is a JSON environment variable mapping email → role, and `STAFF_PHONE_ROSTER` the same keyed by E.164 phone number:
 
 ```json
-{"andhanrahul@gmail.com":"admin","shubham@example.com":"couple","coordinator@example.com":"coordinator"}
+{"andhanrahul@gmail.com":"admin"}
 ```
 
 - Emulator: [`functions/.env.local`](shorelines/functions/.env.local) (gitignored via `*.local`).
 - Production: `firebase functions:secrets:set STAFF_ROSTER`.
 
-A Firestore collection was rejected for this: granting the *first* admin would itself require an admin. An env var has no bootstrap problem. Malformed JSON **fails closed** — it logs and yields an empty roster, so a typo locks everyone out rather than letting everyone in.
+It holds **one admin**, not the team. Two properties are why it still exists now that roles can be granted from the dashboard:
+
+- **Bootstrap.** Approving the first admin needs an admin. An env var has no such hole — which is the original reason a Firestore collection was rejected, and the reason this half of the design didn't change.
+- **Break-glass.** If an admin account is lost, or `staffAccess` is emptied by a bad migration, this still grants. Recovering doesn't require the thing that broke.
+
+Malformed JSON **fails closed** — it logs and yields an empty roster, so a typo locks everyone out rather than letting everyone in.
+
+Because `syncRole` returns on a roster hit, **nothing reachable from the dashboard can demote or remove an env-roster entry.** A compromised admin account cannot lock the real admin out. `decideStaffAccess` refuses an env-roster identity outright rather than writing a row that would never be read.
+
+Changing it is a Secret Manager command *and a redeploy* — Gen 2 functions pin the secret version they were deployed with, so a `secrets:set` alone changes nothing.
+
+### 2. `staffAccess/{identity}` — the everyday path
+
+Someone signs in at `/dashboard`, gets the "No access" screen, and presses **Ask for access**. That calls `requestStaffAccess`, which writes `staffAccess/{identity}` with `status: "pending"` — keyed by the same identity format as everything else here (`email:<lowercased>` / `phone:<e164>`), so a request survives them switching sign-in method.
+
+An admin sees the queue in the **Staff access** panel and calls `decideStaffAccess({ identity, role })`: a role approves, `null` denies or revokes. The claim is applied immediately where possible, so an approval takes effect while the admin is still watching; `syncRole` reconciles from the row regardless on that person's next dashboard load.
+
+A pending or denied row grants **nothing** — it is the absence of a role, not a lesser one.
+
+Guards on the two callables, each of which exists because of a specific failure:
+
+| Guard | Why |
+|---|---|
+| `requestStaffAccess` requires a verified email (or a completed OTP) | Same reason as `syncRole`'s gate — an unverified address is not evidence, so it can't open a request an admin might approve on the strength of the address alone. |
+| One row per identity; a re-request overwrites | `/dashboard` is a normal URL on an open-access app. Rows can't stack. |
+| Hard cap of 50 pending rows | Bounds the pathological case where someone owns many addresses. Admin still gets a queue they can read. |
+| `decideStaffAccess` refuses env-roster identities | The write would be accepted and then silently never read. |
+| `decideStaffAccess` refuses **self** | Otherwise the only admin can deny themselves and lock everyone out of the one endpoint that could undo it. |
+| The claim is applied eagerly only for a *verified* account | So the fast path can't become a way around the verification gate. |
+| Approving `admin` logs at `warn` | Admin is the one role that can mint more admins. It should be visible in the logs. |
+
+Nothing here is client-writable: `firestore.rules` denies `staffAccess` for read *and* write, to everyone including admin — same as `config/live` and `staffPhotoAccess`. The two callables are the only path in, and admin reads the collection through `getStaffRoster`. A pending requester learns their own status from what `syncRole` returns, not by reading the row.
 
 ### The `syncRole` callable
 
-Custom claims can only be written by the Admin SDK, so the client calls `syncRole` (no arguments) after signing in. Three properties are load-bearing:
+Custom claims can only be written by the Admin SDK, so the client calls `syncRole` (no arguments) after signing in. Four properties are load-bearing:
 
-1. **It refuses an unverified email** (`failed-precondition`). Without this, anyone who knows a roster address could register it first with their own password and inherit the role. This is the single most important check in the file.
-2. **It overwrites; it does not merge.** Whatever the incoming token claims, the stored claim becomes the roster's answer — or is cleared entirely if the address isn't listed.
+1. **It refuses an unverified email** (`failed-precondition`). Without this, anyone who knows a roster address could register it first with their own password and inherit the role. This is the single most important check in the file, and it applies to *both* authorities — the approval path can't be used to slip a role onto an unverified address.
+2. **It overwrites; it does not merge.** Whatever the incoming token claims, the stored claim becomes the server's answer — or is cleared entirely if neither authority lists them.
 3. **It reads the address from the token, never from an argument.** There is no parameter a caller could use to nominate someone else.
+4. **The env roster is checked first and returns on a hit.** That ordering is what makes the roster break-glass rather than just one more entry — see above.
+
+It also returns an `access` field (`"pending" | "approved" | "denied" | null`), which is how `DashboardGate` tells "waiting on an admin" apart from "no role and hasn't asked". Those are the same empty claim otherwise, and they need completely different screens.
 
 ### Token refresh
 
@@ -233,18 +271,31 @@ Reproduce with the recipes in [CLAUDE.md](CLAUDE.md) — the owner-token REST by
 
 ## Adding or removing someone
 
+### The normal way — no deploy, no CLI
+
+1. They open `/dashboard` and sign in (password, Google, or phone OTP). A password account confirms its email first.
+2. They land on **No access** and press **Ask for access**.
+3. An admin opens the **Staff access** panel, picks a role on their row, and presses **Approve**.
+4. Their claim is applied straight away; if they were mid-session, it takes effect on their next dashboard load.
+
+**Removing someone** is the same panel: press **Revoke**. That clears the claim immediately where the account is reachable, and `syncRole` clears it on their next load regardless. An open session isn't ejected instantly — their ID token expires within the hour. To eject *now*, revoke their refresh tokens with the Admin SDK.
+
+Approving is not undoable-by-forgetting: a revoked row stays in the panel as **Denied**, so it's visible that access was granted and taken back, rather than quietly disappearing.
+
+### The break-glass way — for the first admin only
+
 1. Edit `STAFF_ROSTER` — `.env.local` for the emulator, `firebase functions:secrets:set STAFF_ROSTER` for production.
-2. Restart the emulator, or redeploy functions.
+2. Restart the emulator, or **redeploy functions** — Gen 2 pins the secret version it was deployed with, so `secrets:set` alone does nothing.
 3. They sign in and confirm their email. `syncRole` runs on load and grants it.
 
-**Removing someone requires them to re-sync**, because the claim is already in their token. Removing an address from the roster does not eject an open session — their next `syncRole` clears it, and their token expires within the hour regardless. To eject immediately, revoke their refresh tokens with the Admin SDK.
+Use this for the account that approves everyone else, and nothing more. Everyone else goes through the request queue, where the grant is visible in the dashboard rather than buried in a secret only a deployer can read.
 
-The **Staff access** panel shows the current roster (via the `getStaffRoster` callable, admin rank only) so it doesn't live only in a CLI command's output. *Role* itself still has no edit form there, for the same bootstrap reason the roster is an env var and not a collection: granting the first admin from a UI would itself require an admin. Editing a role still means the three steps above. Photo access is the one exception — each coordinator row has a live "Granted" / "Not granted" toggle wired to `setStaffPhotoAccess`, because that grant is a Firestore doc an existing admin writes, not a roster entry, so there's no bootstrap problem to protect against.
+The **Staff access** panel shows both: the request queue at the top (the part an admin acts on) and the fixed env roster below it, read-only, with a note saying why. Photo access is a live toggle on any coordinator row in either list, wired to `setStaffPhotoAccess`.
 
 ---
 
 ## Open questions
 
-- Nobody is on the production roster yet — there is no production project.
+- Whether a coordinator should be able to *see* the request queue read-only. Currently `getStaffRoster` is admin rank, so they can't — which means a coordinator can't tell a colleague "you're in the queue, sit tight."
 - Whether coordinators should have a **time-limited** role that expires after the wedding. Currently a role lasts until the roster is edited.
 - Whether vendors (caterer, photographer, DJ) ever need logins. **Decided: no** — they get exports, not accounts. Revisit only if the DJ wants the v2 song-request queue live on the night, which is the one case with a real argument for it.

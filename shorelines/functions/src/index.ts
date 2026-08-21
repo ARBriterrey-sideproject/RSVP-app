@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
@@ -29,15 +29,7 @@ const EVENT_IDS = [
   "sangeet",
   "wedding",
   "reception",
-  "speakeasy",
 ] as const;
-
-/**
- * Invitation-only events. These are never carried by a tier, so a client may
- * only claim attendance at one if the couple has flagged this guest for it on
- * their own document. See the speakeasy guard in the transaction below.
- */
-const INVITE_ONLY_EVENT_IDS: readonly string[] = ["speakeasy"];
 
 const DIETARY = ["vegetarian", "non_vegetarian"] as const;
 
@@ -157,14 +149,15 @@ function staffPhoneRoster(): Record<string, StaffRole> {
 }
 
 /**
- * A coordinator has no photo access by default (see the tightened `photos/`
- * rule in storage.rules) — the couple opts specific people in, one at a time,
- * via `setStaffPhotoAccess`. `staffPhotoAccess/{identity}` keys off the same
- * roster identity space as the two rosters above (`email:<lowercased>` or
- * `phone:<e164>`), so a coordinator's grant survives them switching sign-in
- * method. Couple and admin never need an entry — they pass by rank.
+ * One identity string per person, whichever way they sign in:
+ * `email:<lowercased>` or `phone:<e164>`. Both rosters above, the approval
+ * collection below, and `staffPhotoAccess` all key off this same space, so a
+ * coordinator who switches from a password to Google keeps everything.
+ *
+ * Email is preferred over phone when a token carries both, matching the branch
+ * order in `syncRole`.
  */
-function photoAccessIdentity(
+function rosterIdentity(
   auth: { token: { email?: unknown; phone_number?: unknown } } | undefined
 ): string | null {
   const email = String(auth?.token.email ?? "").trim().toLowerCase();
@@ -174,10 +167,87 @@ function photoAccessIdentity(
   return null;
 }
 
+/**
+ * A coordinator has no photo access by default (see the tightened `photos/`
+ * rule in storage.rules) — the couple opts specific people in, one at a time,
+ * via `setStaffPhotoAccess`. Couple and admin never need an entry: they pass
+ * by rank.
+ */
 async function hasPhotoAccess(identity: string | null): Promise<boolean> {
   if (!identity) return false;
   const snap = await db.collection("staffPhotoAccess").doc(identity).get();
   return snap.get("allowed") === true;
+}
+
+/**
+ * ── The approval roster ──────────────────────────────────────────────────
+ *
+ * `staffAccess/{identity}` is the day-to-day way someone gets a role: they
+ * sign in, ask for access, and an admin approves them with a role. The env
+ * rosters above did not go away and are **not** redundant — they are the root
+ * of trust:
+ *
+ *  - **Bootstrap.** Approving the first admin needs an admin. `STAFF_ROSTER`
+ *    has no such hole, which is the whole reason a collection was originally
+ *    rejected (see the comment on `staffRoster`). It now holds one entry
+ *    instead of the whole team.
+ *  - **Break-glass.** If an admin account is lost, or this collection is
+ *    emptied by a bad migration, the env roster is still there and still
+ *    grants. Recovering does not require the thing that broke.
+ *  - **Precedence.** `syncRole` checks the env roster *first* and returns on a
+ *    hit. Nothing writable from the dashboard can demote a deploy-time entry,
+ *    so a compromised admin account cannot lock the real admin out.
+ *
+ * Nothing here is client-writable: the rules deny `staffAccess` outright and
+ * these two callables are the only path in, same as `config/live`.
+ */
+const STAFF_ACCESS_STATUSES = ["pending", "approved", "denied"] as const;
+type StaffAccessStatus = (typeof STAFF_ACCESS_STATUSES)[number];
+
+/**
+ * `/dashboard` is a normal URL on an open-access app, so the request queue is
+ * something anyone with a verified address can add a row to. One row per
+ * identity keeps that naturally bounded, and this caps the pathological case
+ * where someone owns a lot of addresses — the admin gets a queue they can
+ * still read, not ten thousand rows.
+ */
+const MAX_PENDING_STAFF_REQUESTS = 50;
+
+interface StaffAccessRecord {
+  status: StaffAccessStatus;
+  role: StaffRole | null;
+}
+
+/**
+ * This identity's row, normalised. Only `approved` grants — a pending or
+ * denied row is the absence of a role, not a lesser one.
+ */
+async function readStaffAccess(
+  identity: string
+): Promise<StaffAccessRecord | null> {
+  const snap = await db.collection("staffAccess").doc(identity).get();
+  if (!snap.exists) return null;
+  const status = snap.get("status");
+  const role = snap.get("role");
+  return {
+    status: (STAFF_ACCESS_STATUSES as readonly string[]).includes(status as string)
+      ? (status as StaffAccessStatus)
+      : "pending",
+    role: (STAFF_ROLES as readonly string[]).includes(role as string)
+      ? (role as StaffRole)
+      : null,
+  };
+}
+
+/** Whether this identity is pinned by a deploy-time roster entry. */
+function envRosterRole(identity: string): StaffRole | null {
+  if (identity.startsWith("email:")) {
+    return staffRoster()[identity.slice("email:".length)] ?? null;
+  }
+  if (identity.startsWith("phone:")) {
+    return staffPhoneRoster()[identity.slice("phone:".length)] ?? null;
+  }
+  return null;
 }
 
 /**
@@ -223,6 +293,15 @@ interface SubmitRsvpPayload {
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) throw new HttpsError("invalid-argument", message);
+}
+
+/**
+ * Firestore `Timestamp`s don't survive a callable's JSON round-trip as
+ * anything useful, so anything shipped to a client goes out as ISO-8601.
+ */
+function isoOrNull(value: unknown): string | null {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  return null;
 }
 
 function cleanString(value: unknown, maxLen: number, field: string): string {
@@ -419,9 +498,6 @@ function parseAttendance(value: unknown): Record<string, boolean> {
  *     (the link they arrived on) and is never read from the client again. A
  *     guest cannot promote themselves from reception_only to full.
  *  2. PARTY SIZE IS CAPPED server-side. The client cap is UI feedback only.
- *  3. INVITE-ONLY EVENTS ARE NOT SELF-SERVE. A guest may only accept the
- *     speakeasy if the couple has already flagged them for it; the flag itself
- *     is written by the dashboard, never here.
  */
 export const submitRsvp = onCall(
   { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
@@ -478,17 +554,6 @@ export const submitRsvp = onCall(
         tier = claimed as Tier;
       }
 
-      // The flag lives on the guest's own document and is only ever written by
-      // the couple from the dashboard. Reading it inside the transaction is
-      // what makes the check race-free: a client can't submit against a flag
-      // that was revoked a moment ago.
-      const speakeasyInvited = existing.get("speakeasyInvited") === true;
-      const perEventAttendance = Object.fromEntries(
-        Object.entries(claimedAttendance).filter(
-          ([id]) => speakeasyInvited || !INVITE_ONLY_EVENT_IDS.includes(id)
-        )
-      );
-
       // Minted once and never rotated, so a QR the family has already printed
       // or forwarded keeps working after they edit their reply.
       const shareCode: string =
@@ -506,7 +571,7 @@ export const submitRsvp = onCall(
         language,
         party,
         partySize: party.length,
-        perEventAttendance,
+        perEventAttendance: claimedAttendance,
         travel,
         notes,
         // Unverified — typed by the guest, kept only for the couple to call.
@@ -539,13 +604,7 @@ export const submitRsvp = onCall(
         // forwarded, and everything in this document is effectively public.
         party: party.map(({ name, ageGroup }) => ({ name, ageGroup })),
         partySize: party.length,
-        // Invite-only events are stripped: the whole point of the speakeasy is
-        // that forwarding can't leak it.
-        perEventAttendance: Object.fromEntries(
-          Object.entries(perEventAttendance).filter(
-            ([id]) => !INVITE_ONLY_EVENT_IDS.includes(id)
-          )
-        ),
+        perEventAttendance: claimedAttendance,
         updatedAt: FieldValue.serverTimestamp(),
       });
 
@@ -612,51 +671,244 @@ export const recoverRsvp = onCall(
   }
 );
 
+/* -------------------------------------------------------------------------
+ * Private events — privateEvents/{id}, revealed per guest.
+ * ---------------------------------------------------------------------- */
+
 /**
- * Flags (or unflags) a guest for an invitation-only event.
+ * A gathering the couple adds after the app is built, shown only to the guests
+ * they name one by one.
  *
- * Couple and up — not coordinators. Who gets asked to the speakeasy is the
- * couple's invitation to extend, not a logistics decision.
+ * These are runtime data, not config: which ones exist is the couple's to
+ * decide on the day. There is nothing to RSVP for — the couple has already
+ * settled who is coming, so the app's job is to tell those guests where and
+ * when, not to ask them again.
  *
- * Deliberately the *only* way the flag is ever set: Firestore rules refuse
- * every client write to `rsvps`, so even the couple's own account goes through
- * here. The guest's app reveals the speakeasy off this flag, and `submitRsvp`
- * re-checks it before accepting attendance.
+ * SECURITY. The reveal lives entirely on this side. Firestore rules let staff
+ * read `privateEvents` and refuse everyone else, so a guest's only way to one
+ * is `getMyPrivateEvents`, which reads the invite list off *their own* RSVP
+ * document with the Admin SDK. There is no tier, no URL parameter and no client
+ * flag anywhere in the path — the closest thing to a leak is a doc id, which
+ * buys nothing without a matching entry on the caller's own document.
  */
-export const setSpeakeasyInvite = onCall(
+const MAX_PRIVATE_EVENTS = 20;
+const MAX_PRIVATE_EVENT_NOTE_LEN = 400;
+
+interface PrivateEventPayload {
+  id?: unknown;
+  name?: unknown;
+  startsAt?: unknown;
+  endsAt?: unknown;
+  venue?: unknown;
+  mapsQuery?: unknown;
+  dressCode?: unknown;
+  note?: unknown;
+}
+
+/** Optional free text: absent, null or "" all mean "not set", never an error. */
+function optionalText(value: unknown, maxLen: number, field: string): string {
+  if (value === undefined || value === null || value === "") return "";
+  return cleanString(value, maxLen, field);
+}
+
+/**
+ * Creates a private event, or edits one when `id` names an existing document.
+ *
+ * Couple and up — not coordinators. Who gets asked is the couple's invitation
+ * to extend, and a coordinator arranging cars has no business knowing the
+ * gathering exists.
+ */
+export const savePrivateEvent = onCall(
   { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
   async (request) => {
     if (rankOf(request.auth?.token.role) < RANK.couple) {
       throw new HttpsError(
         "permission-denied",
-        "Only the couple can change who's invited to the speakeasy."
+        "Only the couple can add a private event."
       );
     }
 
-    const { ownerUid, invited } = (request.data ?? {}) as {
+    const payload = (request.data ?? {}) as PrivateEventPayload;
+
+    const name = cleanString(payload.name, 80, "name");
+    const startsAt = parseInstant(payload.startsAt, "startsAt");
+    const endsAt = parseInstant(payload.endsAt, "endsAt");
+    // Same reason `applyOverlay` rejects an inverted window as a pair: nothing
+    // downstream fails on one, it just renders an event that ends before it
+    // begins, which reads as a bug in the app rather than a typo in the form.
+    assert(
+      Date.parse(endsAt) >= Date.parse(startsAt),
+      "The end time must not be before the start time."
+    );
+
+    const doc = {
+      name,
+      startsAt,
+      endsAt,
+      venue: optionalText(payload.venue, 120, "venue"),
+      mapsQuery: optionalText(payload.mapsQuery, 200, "mapsQuery"),
+      dressCode: optionalText(payload.dressCode, 80, "dressCode"),
+      note: optionalText(payload.note, MAX_PRIVATE_EVENT_NOTE_LEN, "note"),
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: request.auth?.uid ?? null,
+    };
+
+    const collection = db.collection("privateEvents");
+
+    if (typeof payload.id === "string" && payload.id.length > 0) {
+      const ref = collection.doc(payload.id);
+      const existing = await ref.get();
+      assert(existing.exists, "That private event no longer exists.");
+      await ref.update(doc);
+      return { ok: true, id: ref.id };
+    }
+
+    const count = (await collection.count().get()).data().count;
+    assert(
+      count < MAX_PRIVATE_EVENTS,
+      `You can have at most ${MAX_PRIVATE_EVENTS} private events.`
+    );
+
+    const ref = collection.doc();
+    await ref.set({ ...doc, createdAt: FieldValue.serverTimestamp() });
+    return { ok: true, id: ref.id };
+  }
+);
+
+/**
+ * Deletes a private event and every guest's invite to it in the same pass.
+ *
+ * The second half is the point. Leaving stale ids on guest documents would mean
+ * `getMyPrivateEvents` quietly skipping a missing doc forever, and re-creating
+ * an event with the same id would hand it back to a guest list nobody chose.
+ */
+export const deletePrivateEvent = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.couple) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the couple can delete a private event."
+      );
+    }
+
+    const { id } = (request.data ?? {}) as { id?: unknown };
+    assert(typeof id === "string" && id.length > 0, "id is required");
+
+    const invited = await db
+      .collection("rsvps")
+      .where("invitedPrivateEventIds", "array-contains", id as string)
+      .get();
+
+    const batch = db.batch();
+    for (const guest of invited.docs) {
+      batch.update(guest.ref, {
+        invitedPrivateEventIds: FieldValue.arrayRemove(id as string),
+      });
+    }
+    batch.delete(db.collection("privateEvents").doc(id as string));
+    await batch.commit();
+
+    return { ok: true, id, revoked: invited.size };
+  }
+);
+
+/**
+ * Adds or removes one guest's invite to one private event.
+ *
+ * The invite lives on the guest's own RSVP document rather than a member list
+ * on the event, so the read that reveals it — `getMyPrivateEvents` — is a
+ * single lookup of a document the caller already owns.
+ */
+export const setPrivateEventInvite = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.couple) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the couple can change who's invited to a private event."
+      );
+    }
+
+    const { eventId, ownerUid, invited } = (request.data ?? {}) as {
+      eventId?: unknown;
       ownerUid?: unknown;
       invited?: unknown;
     };
+    assert(
+      typeof eventId === "string" && eventId.length > 0,
+      "eventId is required"
+    );
     assert(
       typeof ownerUid === "string" && ownerUid.length > 0,
       "ownerUid is required"
     );
     assert(typeof invited === "boolean", "invited must be a boolean");
 
+    const event = await db
+      .collection("privateEvents")
+      .doc(eventId as string)
+      .get();
+    assert(event.exists, "That private event no longer exists.");
+
     const ref = db.collection("rsvps").doc(ownerUid as string);
     const snap = await ref.get();
     assert(snap.exists, "That guest has not replied yet.");
 
-    const update: Record<string, unknown> = {
-      speakeasyInvited: invited,
+    await ref.update({
+      invitedPrivateEventIds: invited
+        ? FieldValue.arrayUnion(eventId as string)
+        : FieldValue.arrayRemove(eventId as string),
       updatedAt: FieldValue.serverTimestamp(),
-    };
-    // Revoking has to take the acceptance with it, or the guest keeps a "yes"
-    // on an event they can no longer see.
-    if (!invited) update["perEventAttendance.speakeasy"] = FieldValue.delete();
+    });
 
-    await ref.update(update);
-    return { ok: true, ownerUid, invited };
+    return { ok: true, eventId, ownerUid, invited };
+  }
+);
+
+/**
+ * The guest's side: every private event this caller has been named for.
+ *
+ * Any signed-in guest may call it, and that is safe precisely because the
+ * answer is derived from `rsvps/{their own uid}` — there is no parameter to
+ * tamper with. A guest who has been named for nothing gets an empty list, which
+ * is the same answer a guest who has not replied yet gets.
+ */
+export const getMyPrivateEvents = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
+  async (request) => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Sign in first.");
+    }
+
+    const guest = await db.collection("rsvps").doc(uid).get();
+    const ids = guest.get("invitedPrivateEventIds");
+    if (!Array.isArray(ids) || ids.length === 0) return { events: [] };
+
+    const refs = ids
+      .filter((id): id is string => typeof id === "string" && id.length > 0)
+      .slice(0, MAX_PRIVATE_EVENTS)
+      .map((id) => db.collection("privateEvents").doc(id));
+    if (refs.length === 0) return { events: [] };
+
+    const docs = await db.getAll(...refs);
+
+    const events = docs
+      .filter((doc) => doc.exists)
+      .map((doc) => ({
+        id: doc.id,
+        name: doc.get("name") ?? "",
+        startsAt: doc.get("startsAt") ?? "",
+        endsAt: doc.get("endsAt") ?? "",
+        venue: doc.get("venue") ?? "",
+        mapsQuery: doc.get("mapsQuery") ?? "",
+        dressCode: doc.get("dressCode") ?? "",
+        note: doc.get("note") ?? "",
+      }))
+      .sort((a, b) => String(a.startsAt).localeCompare(String(b.startsAt)));
+
+    return { events };
   }
 );
 
@@ -664,7 +916,7 @@ export const setSpeakeasyInvite = onCall(
  * Marks a reply for the couple's attention (a suspicious headcount, a duplicate
  * submission from a different phone) without removing it. Firestore rules
  * refuse every client write to `rsvps`, so this callable is the only path even
- * for the couple's own account, same as `setSpeakeasyInvite` above.
+ * for the couple's own account, same as `setPrivateEventInvite` above.
  *
  * `flagged` is only ever set at creation and never touched by `submitRsvp`'s
  * update path — see the comment there. That is what lets a flag survive a
@@ -754,9 +1006,18 @@ export const deleteResponse = onCall(
  * account has to click a link in that mailbox first; a Google account arrives
  * verified by Google.
  *
- * Note this is self-service by design: there is no "grant a role" endpoint, so
- * there is no endpoint to abuse. The roster is the only authority, and changing
- * it requires deploy access.
+ * Two authorities, checked in this order:
+ *
+ *   1. the deploy-time env roster — one break-glass admin, changeable only by
+ *      someone who can already deploy; and
+ *   2. `staffAccess/{identity}`, where an admin has approved a request.
+ *
+ * The order is the safety property. An env-roster entry can never be demoted
+ * or removed by anything reachable from the dashboard, so a compromised admin
+ * account cannot lock the real admin out — see the comment on the collection.
+ *
+ * `email_verified` applies to both authorities equally: the approval path
+ * cannot be used to slip a role onto an unverified address.
  */
 export const syncRole = onCall(
   { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
@@ -776,11 +1037,15 @@ export const syncRole = onCall(
     // phone isn't sent down the email branch just because their Google
     // account (if any) happens to also carry an address.
     if (phone) {
-      const assigned = staffPhoneRoster()[phone] ?? null;
+      const identity = `phone:${phone}`;
+      const pinned = staffPhoneRoster()[phone] ?? null;
+      const record = pinned ? null : await readStaffAccess(identity);
+      const assigned = pinned ?? (record?.status === "approved" ? record.role : null);
+      const access: StaffAccessStatus | null = pinned ? "approved" : record?.status ?? null;
       const photoAccess = assigned
-        ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(`phone:${phone}`))
+        ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(identity))
         : false;
-      if (assigned === current) return { role: assigned, changed: false, photoAccess };
+      if (assigned === current) return { role: assigned, changed: false, photoAccess, access };
 
       await getAuth().setCustomUserClaims(auth.uid, assigned ? { role: assigned } : {});
 
@@ -789,15 +1054,16 @@ export const syncRole = onCall(
         phone,
         from: current,
         to: assigned,
+        source: pinned ? "roster" : "approval",
       });
 
-      return { role: assigned, changed: true, photoAccess };
+      return { role: assigned, changed: true, photoAccess, access };
     }
 
     // A phone-auth guest reaching this endpoint has no email and simply gets
     // nothing back — not an error, since the dashboard is a normal URL and a
     // curious guest may well open it.
-    if (!email) return { role: null, changed: false, photoAccess: false };
+    if (!email) return { role: null, changed: false, photoAccess: false, access: null };
 
     if (auth.token.email_verified !== true) {
       throw new HttpsError(
@@ -806,12 +1072,18 @@ export const syncRole = onCall(
       );
     }
 
-    const assigned = staffRoster()[email] ?? null;
+    const identity = `email:${email}`;
+    const pinned = staffRoster()[email] ?? null;
+    const record = pinned ? null : await readStaffAccess(identity);
+    const assigned = pinned ?? (record?.status === "approved" ? record.role : null);
+    // `access` is how the gate tells "asked, waiting" apart from "never asked"
+    // — the client can't read `staffAccess` itself, the rules deny it.
+    const access: StaffAccessStatus | null = pinned ? "approved" : record?.status ?? null;
     const photoAccess = assigned
-      ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(`email:${email}`))
+      ? rankOf(assigned) >= RANK.couple || (await hasPhotoAccess(identity))
       : false;
 
-    if (assigned === current) return { role: assigned, changed: false, photoAccess };
+    if (assigned === current) return { role: assigned, changed: false, photoAccess, access };
 
     // Replacing the whole claim object, not merging: dropping off the roster
     // has to actually remove the role, not leave a stale one behind.
@@ -822,22 +1094,23 @@ export const syncRole = onCall(
       email,
       from: current,
       to: assigned,
+      source: pinned ? "roster" : "approval",
     });
 
     // The caller's existing ID token still carries the old claim — the client
     // has to force-refresh before Firestore rules will see this.
-    return { role: assigned, changed: true, photoAccess };
+    return { role: assigned, changed: true, photoAccess, access };
   }
 );
 
 /**
- * Read-only view of who is on the roster and what they'd get, for the "Staff
- * access" dashboard panel. Deliberately not a management endpoint: the roster
- * stays an env-var / Secret Manager value, editable only by someone who can
- * already deploy, because a Firestore-backed roster has a bootstrap problem —
- * granting the first admin would itself require an admin (see `staffRoster`
- * above). This only ever reads that same source and requires an admin claim
- * to call, so it adds no new way in.
+ * Everything the "Staff access" panel renders: the deploy-time env roster (read
+ * only — changing it needs deploy access, on purpose) and the `staffAccess`
+ * request queue, which is the part an admin actually acts on via
+ * `decideStaffAccess`.
+ *
+ * Timestamps go out as ISO strings rather than Firestore `Timestamp` objects,
+ * which don't survive the callable's JSON serialisation intact.
  */
 export const getStaffRoster = onCall(
   { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
@@ -864,7 +1137,222 @@ export const getStaffRoster = onCall(
       photoAccess[doc.id] = doc.get("allowed") === true;
     }
 
-    return { email, phone, photoAccess };
+    const requestsSnap = await db.collection("staffAccess").get();
+    const requests = requestsSnap.docs
+      .map((doc) => ({
+        identity: doc.id,
+        kind: doc.get("kind") === "phone" ? "phone" : "email",
+        value: String(doc.get("value") ?? ""),
+        status: String(doc.get("status") ?? "pending"),
+        role: (STAFF_ROLES as readonly string[]).includes(doc.get("role"))
+          ? (doc.get("role") as StaffRole)
+          : null,
+        displayName: doc.get("displayName") ?? null,
+        requestedAt: isoOrNull(doc.get("requestedAt")),
+        decidedAt: isoOrNull(doc.get("decidedAt")),
+        decidedByIdentity: doc.get("decidedByIdentity") ?? null,
+      }))
+      // Pending first — that's the queue an admin came here to clear.
+      .sort((a, b) => {
+        if ((a.status === "pending") !== (b.status === "pending")) {
+          return a.status === "pending" ? -1 : 1;
+        }
+        return (b.requestedAt ?? "").localeCompare(a.requestedAt ?? "");
+      });
+
+    return { email, phone, photoAccess, requests };
+  }
+);
+
+/**
+ * "I'm staff, please let me in." Creates or refreshes this identity's row in
+ * `staffAccess` with `status: "pending"`; grants nothing by itself.
+ *
+ * Anyone signed in can call this — that's the point, it's how someone with no
+ * role asks for one, and `/dashboard` is a normal URL on an open-access app.
+ * Three things keep that from being a spam surface: one row per identity (a
+ * re-request overwrites, it never stacks), a verified email or a completed
+ * OTP to have an identity at all, and a hard cap on how many pending rows can
+ * exist at once.
+ */
+export const requestStaffAccess = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
+  async (request) => {
+    const auth = request.auth;
+    if (!auth) {
+      throw new HttpsError("unauthenticated", "Sign in first.");
+    }
+
+    const email = String(auth.token.email ?? "").trim().toLowerCase();
+    const phone = String(auth.token.phone_number ?? "").trim();
+
+    // Same gate as `syncRole`, for the same reason: an unverified address is
+    // not evidence of anything, so it can't be allowed to open a request an
+    // admin might approve on the strength of the address alone.
+    if (email && auth.token.email_verified !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Confirm your email address first — check your inbox for the link."
+      );
+    }
+
+    const identity = rosterIdentity(auth);
+    if (!identity) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Sign in with an email address or a phone number first."
+      );
+    }
+
+    // Already pinned by the env roster: a row here would never be read.
+    if (envRosterRole(identity)) {
+      return { status: "approved" as const, identity };
+    }
+
+    const kind = email ? "email" : "phone";
+    const value = email || phone;
+    const ref = db.collection("staffAccess").doc(identity);
+    const existing = await ref.get();
+
+    if (existing.get("status") === "approved") {
+      return { status: "approved" as const, identity };
+    }
+
+    if (!existing.exists) {
+      const pending = await db
+        .collection("staffAccess")
+        .where("status", "==", "pending")
+        .limit(MAX_PENDING_STAFF_REQUESTS)
+        .get();
+      if (pending.size >= MAX_PENDING_STAFF_REQUESTS) {
+        throw new HttpsError(
+          "resource-exhausted",
+          "There are too many access requests waiting. Ask an admin to clear the queue."
+        );
+      }
+    }
+
+    const name = String(auth.token.name ?? "").trim().slice(0, 80);
+
+    // Full overwrite, not a merge: a previously denied row goes back to
+    // pending cleanly, with the old decision gone rather than half-present.
+    await ref.set({
+      kind,
+      value,
+      status: "pending",
+      role: null,
+      displayName: name || null,
+      uid: auth.uid,
+      requestedAt: FieldValue.serverTimestamp(),
+      decidedAt: null,
+      decidedBy: null,
+      decidedByIdentity: null,
+    });
+
+    logger.info("staff access requested", { uid: auth.uid, identity });
+    return { status: "pending" as const, identity };
+  }
+);
+
+/**
+ * An admin approves a request with a role, or denies it with `role: null`.
+ * The only write path onto a `staffAccess` decision — the rules deny the
+ * collection outright.
+ *
+ * Two refusals matter more than they look:
+ *
+ *  - **Env-roster identities.** Writing a row for one would be accepted and
+ *    then silently never read, since `syncRole` returns on the roster hit. A
+ *    refusal is better than a decision that appears to apply and doesn't.
+ *  - **Yourself.** Otherwise the only admin can deny themselves and lock
+ *    everyone out of the one endpoint that could undo it.
+ *
+ * The claim is applied here rather than waiting for the person's next
+ * `syncRole`, so an approval takes effect while the admin is still watching —
+ * but only for a verified account, so this can't be a way around that gate.
+ */
+export const decideStaffAccess = onCall(
+  { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK, secrets: ["STAFF_ROSTER", "STAFF_PHONE_ROSTER"] },
+  async (request) => {
+    if (rankOf(request.auth?.token.role) < RANK.admin) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an admin can decide staff access."
+      );
+    }
+
+    const { identity, role } = (request.data ?? {}) as {
+      identity?: unknown;
+      role?: unknown;
+    };
+    assert(
+      typeof identity === "string" && /^(email|phone):.+$/.test(identity),
+      "identity must be an email: or phone: key"
+    );
+    assert(
+      role === null ||
+        (typeof role === "string" && (STAFF_ROLES as readonly string[]).includes(role)),
+      "role must be a staff role or null"
+    );
+    const decided = (role as StaffRole | null) ?? null;
+
+    const callerIdentity = rosterIdentity(request.auth);
+    if (identity === callerIdentity) {
+      throw new HttpsError(
+        "failed-precondition",
+        "You can't change your own access."
+      );
+    }
+    if (envRosterRole(identity)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "That person is pinned by the deploy-time roster and can only be changed by redeploying."
+      );
+    }
+
+    const ref = db.collection("staffAccess").doc(identity);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "No such access request.");
+    }
+
+    await ref.update({
+      status: decided ? "approved" : "denied",
+      role: decided,
+      decidedAt: FieldValue.serverTimestamp(),
+      decidedBy: request.auth?.uid ?? null,
+      decidedByIdentity: callerIdentity,
+    });
+
+    // Apply (or clear) the claim now. Best-effort: the row is the authority
+    // and `syncRole` reconciles from it on their next load, so a missing Auth
+    // account — approved before they've ever signed in — isn't an error.
+    const value = identity.slice(identity.indexOf(":") + 1);
+    let applied = false;
+    try {
+      const user =
+        identity.startsWith("email:")
+          ? await getAuth().getUserByEmail(value)
+          : await getAuth().getUserByPhoneNumber(value);
+      const verified = identity.startsWith("phone:") || user.emailVerified;
+      if (verified || !decided) {
+        await getAuth().setCustomUserClaims(user.uid, decided ? { role: decided } : {});
+        applied = true;
+      }
+    } catch (error) {
+      logger.info("staff access decided, claim not applied yet", { identity, error });
+    }
+
+    const log = decided === "admin" ? logger.warn : logger.info;
+    log("staff access decided", {
+      by: request.auth?.uid,
+      byIdentity: callerIdentity,
+      identity,
+      role: decided,
+      applied,
+    });
+
+    return { ok: true, identity, role: decided, applied };
   }
 );
 
@@ -937,7 +1425,7 @@ export const listEventPhotos = onCall(
       );
     }
     if (rank < RANK.couple) {
-      const identity = photoAccessIdentity(request.auth);
+      const identity = rosterIdentity(request.auth);
       if (!(await hasPhotoAccess(identity))) {
         throw new HttpsError(
           "permission-denied",
@@ -1020,7 +1508,6 @@ const EVENT_START_TIMES: Record<string, { startsAt: string; endsAt: string }> = 
   sangeet: { startsAt: "2026-12-29T18:00:00+05:30", endsAt: "2026-12-29T21:00:00+05:30" },
   wedding: { startsAt: "2026-12-30T10:00:00+05:30", endsAt: "2026-12-30T14:00:00+05:30" },
   reception: { startsAt: "2026-12-30T18:30:00+05:30", endsAt: "2026-12-30T21:00:00+05:30" },
-  speakeasy: { startsAt: "2026-12-29T22:00:00+05:30", endsAt: "2026-12-30T01:00:00+05:30" },
 };
 
 const CHAT_COOLDOWN_MS = 3_000;

@@ -27,7 +27,8 @@ export interface RsvpRecord {
   shareCode: string;
   recoveryCode: string;
   flagged: boolean;
-  speakeasyInvited: boolean;
+  /** Which private events this guest has been named for. Written only by setPrivateEventInvite. */
+  invitedPrivateEventIds: string[];
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -35,7 +36,7 @@ export interface RsvpRecord {
 /**
  * Every reply, straight from Firestore — the rules allow `list` on `rsvps` for
  * any signed-in staff account (`isStaff()`), so this is one read for whichever
- * panel needs the full guest list: Replies, Travel & pickups, The speakeasy.
+ * panel needs the full guest list: Replies, Travel & pickups, Private events.
  * Under 1,000 guests, so no pagination.
  */
 export async function listRsvps(): Promise<RsvpRecord[]> {
@@ -66,7 +67,11 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       shareCode: typeof data.shareCode === "string" ? data.shareCode : "",
       recoveryCode: typeof data.recoveryCode === "string" ? data.recoveryCode : "",
       flagged: data.flagged === true,
-      speakeasyInvited: data.speakeasyInvited === true,
+      invitedPrivateEventIds: Array.isArray(data.invitedPrivateEventIds)
+        ? data.invitedPrivateEventIds.filter(
+            (id: unknown): id is string => typeof id === "string"
+          )
+        : [],
       createdAt: data.createdAt ?? null,
       updatedAt: data.updatedAt ?? null,
     } satisfies RsvpRecord;

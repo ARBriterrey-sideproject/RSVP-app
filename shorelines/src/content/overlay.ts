@@ -6,7 +6,7 @@
  * down, and it is the only place the two halves of a wedding's facts meet.
  *
  * Where this sits matters. The merge happens *below* every derivation in
- * `wedding.ts` — `mealsForEvents`, `eventsForGuest`, every formatter — because
+ * `wedding.ts` — `mealsForEvents`, `eventsForTier`, every formatter — because
  * those read times and compute from them. A merge applied above the derivations
  * would move an event on screen while `mealsForEvents` went on windowing meals
  * against the literal, and a guest would quietly be shown the wrong meals with
@@ -39,10 +39,9 @@ export function applyOverlay(
   if (!overlay) return config;
 
   const events = mergeEvents(config.events, overlay);
-  const invitationOnlyEvents = mergeEvents(config.invitationOnlyEvents, overlay);
   const schedule = mergeSchedule(config.schedule, overlay);
 
-  return { ...config, events, invitationOnlyEvents, schedule };
+  return { ...config, events, schedule };
 }
 
 /**

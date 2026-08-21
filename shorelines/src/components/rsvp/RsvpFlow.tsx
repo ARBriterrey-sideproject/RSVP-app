@@ -14,7 +14,7 @@ import { toE164 } from "@/lib/firebase/auth";
 import {
   COUPLE,
   DESTINATION,
-  eventsForGuest,
+  eventsForTier,
   isTier,
   normaliseDietary,
   type DietaryOption,
@@ -94,14 +94,9 @@ export function RsvpFlow({
   const [storedTier, setStoredTier] = useState<Tier | null>(null);
   const effectiveTier = storedTier ?? tier;
 
-  // The speakeasy is invitation-only and revealed by a flag the couple sets on
-  // this guest's own document. It can only ever be true after the stored RSVP
-  // has been read back — there is no link, code or prop that turns it on.
-  const [speakeasyInvited, setSpeakeasyInvited] = useState(false);
-
   const events = useMemo(
-    () => eventsForGuest(effectiveTier, { speakeasyInvited, config }),
-    [effectiveTier, speakeasyInvited, config]
+    () => eventsForTier(effectiveTier, config),
+    [effectiveTier, config]
   );
 
   // Minted by the callable on first submission; the QR on the done screen
@@ -205,8 +200,6 @@ export function RsvpFlow({
       const nextTier = isTier(stored.tier) ? stored.tier : tier;
       if (isTier(stored.tier)) setStoredTier(stored.tier);
 
-      const invited = stored.speakeasyInvited === true;
-      setSpeakeasyInvited(invited);
       if (typeof stored.shareCode === "string") setShareCode(stored.shareCode);
       if (typeof stored.recoveryCode === "string")
         setRecoveryCode(stored.recoveryCode);
@@ -224,13 +217,7 @@ export function RsvpFlow({
       >;
       setAttending(
         Object.fromEntries(
-          eventsForGuest(nextTier, {
-            speakeasyInvited: invited,
-            config,
-          }).map((e) => [
-            e.id,
-            previous[e.id] === true,
-          ])
+          eventsForTier(nextTier, config).map((e) => [e.id, previous[e.id] === true])
         )
       );
 

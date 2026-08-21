@@ -16,8 +16,7 @@ import { PanelNote } from "./panelKit";
  */
 
 function eventName(eventId: EventId, config: WeddingConfig): string {
-  const all = [...config.events, ...config.invitationOnlyEvents];
-  return all.find((event) => event.id === eventId)?.name ?? eventId;
+  return config.events.find((event) => event.id === eventId)?.name ?? eventId;
 }
 
 function SongRow({ request }: { request: SongRequest }) {
@@ -84,8 +83,7 @@ export function SongRequestsPanel({
 
   const grouped = useMemo(() => {
     if (!requests) return [];
-    const allEvents = [...config.events, ...config.invitationOnlyEvents];
-    return allEvents
+    return config.events
       .map((event) => ({
         event,
         requests: requests.filter((r) => r.eventId === event.id),

@@ -10,8 +10,8 @@
  * MemoriesComposer's `sent` list.
  *
  * Which events a guest may upload to is re-derived from their own `rsvps/{uid}`
- * document (tier, speakeasyInvited, perEventAttendance) exactly the way
- * TodayScreen does it — never trusted from the URL or a prop default.
+ * document (tier, perEventAttendance) exactly the way TodayScreen does it —
+ * never trusted from the URL or a prop default.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -24,7 +24,7 @@ import {
 } from "@/components/nav/BottomTabBar";
 import { getFirebase } from "@/lib/firebase/client";
 import { uploadPhoto } from "@/lib/firebase/photos";
-import { eventsForGuest, isTier, type Tier } from "@/content/wedding";
+import { eventsForTier, isTier, type Tier } from "@/content/wedding";
 import { eventCopy } from "@/i18n/weddingCopy";
 import type { WeddingEvent } from "@/content/schema";
 
@@ -38,7 +38,6 @@ export function PhotoUploadScreen({ tier }: { tier: Tier }) {
 
   const [uid, setUid] = useState<string | null>(null);
   const [storedTier, setStoredTier] = useState<Tier | null>(null);
-  const [speakeasyInvited, setSpeakeasyInvited] = useState(false);
   const [perEventAttendance, setPerEventAttendance] = useState<Record<
     string,
     boolean
@@ -60,7 +59,6 @@ export function PhotoUploadScreen({ tier }: { tier: Tier }) {
       if (!snap.exists()) return;
       const stored = snap.data();
       if (isTier(stored.tier)) setStoredTier(stored.tier);
-      setSpeakeasyInvited(stored.speakeasyInvited === true);
       if (stored.perEventAttendance && typeof stored.perEventAttendance === "object") {
         setPerEventAttendance(stored.perEventAttendance as Record<string, boolean>);
       }
@@ -68,8 +66,8 @@ export function PhotoUploadScreen({ tier }: { tier: Tier }) {
   }, []);
 
   const eligible = useMemo(
-    () => eventsForGuest(effectiveTier, { speakeasyInvited }),
-    [effectiveTier, speakeasyInvited]
+    () => eventsForTier(effectiveTier),
+    [effectiveTier]
   );
   const attending = useMemo(
     () =>

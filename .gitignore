@@ -9,6 +9,11 @@ CLAUDE.md
 # Screenshots from browser-driven verification runs. Useful while working,
 # not worth versioning — they go stale the moment a style token changes.
 /.playwright-mcp/
-/demo-*.png
+/*.png
+
+# Setup/ops tracking doc — currently holds a working credential pair
+# (STAFF_PHONE_ROSTER test number + OTP). Keep untracked until OWED.md's
+# own 1.10 is closed and that's no longer true.
+/OWED.md
 
 .DS_Store

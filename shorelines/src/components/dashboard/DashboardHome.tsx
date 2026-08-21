@@ -10,10 +10,10 @@ import { LiveChatPanel } from "./LiveChatPanel";
 import { MemoriesPanel } from "./MemoriesPanel";
 import { PhotoAlbumsPanel } from "./PhotoAlbumsPanel";
 import { PollsPanel } from "./PollsPanel";
+import { PrivateEventsPanel } from "./PrivateEventsPanel";
 import { RepliesPanel } from "./RepliesPanel";
 import { SchedulePanel } from "./SchedulePanel";
 import { SongRequestsPanel } from "./SongRequestsPanel";
-import { SpeakeasyPanel } from "./SpeakeasyPanel";
 import { StaffAccessPanel } from "./StaffAccessPanel";
 import { useStaffAuth } from "./StaffAuthProvider";
 import { TravelPanel } from "./TravelPanel";
@@ -66,10 +66,10 @@ const PANELS: {
     ),
   },
   {
-    capability: "grantSpeakeasy",
-    title: "The speakeasy",
-    description: "Choose who gets asked. Nobody sees it until you add them.",
-    render: () => <SpeakeasyPanel />,
+    capability: "managePrivateEvents",
+    title: "Private events",
+    description: "A gathering only the guests you name ever hear about.",
+    render: () => <PrivateEventsPanel />,
   },
   {
     capability: "viewMemories",

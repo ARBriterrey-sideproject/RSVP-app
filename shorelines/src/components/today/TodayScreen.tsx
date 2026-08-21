@@ -6,9 +6,9 @@
  * The other half of "one app, one link, two phases": `page.tsx` swaps this in
  * for `InviteLanding` once `isWeddingLive(config)` is true, on the same tier
  * link the guest has always had. Client, not server, for the same reason as
- * `ScheduleScreen` — the stored tier, the speakeasy flag, the guest's name and
- * which events they actually said yes to can only come from their own
- * Firestore document, never the URL they arrived on.
+ * `ScheduleScreen` — the stored tier, the guest's name and which events they
+ * actually said yes to can only come from their own Firestore document, never
+ * the URL they arrived on.
  *
  * Two deliberate departures from the mockup, both explained where they
  * happen below: "High tide" becomes "Feels like" (Open-Meteo has no tide
@@ -36,7 +36,7 @@ import {
   ACCENT_FILL,
   ACCENT_TINT,
   dayKey,
-  eventsForGuest,
+  eventsForTier,
   isTier,
   mapsUrl,
   mealsForEvents,
@@ -341,11 +341,10 @@ export function TodayScreen({
     return () => clearInterval(id);
   }, [nowOffsetMs]);
 
-  // Same pattern as ScheduleScreen and RsvpFlow: the stored tier, speakeasy
-  // flag, guest name and per-event replies can only come from the guest's own
-  // Firestore document, never the link they arrived on.
+  // Same pattern as ScheduleScreen and RsvpFlow: the stored tier, guest name
+  // and per-event replies can only come from the guest's own Firestore
+  // document, never the link they arrived on.
   const [storedTier, setStoredTier] = useState<Tier | null>(null);
-  const [speakeasyInvited, setSpeakeasyInvited] = useState(false);
   const [guestName, setGuestName] = useState<string | null>(null);
   const [perEventAttendance, setPerEventAttendance] = useState<Record<
     string,
@@ -361,7 +360,6 @@ export function TodayScreen({
       if (!snap.exists()) return;
       const stored = snap.data();
       if (isTier(stored.tier)) setStoredTier(stored.tier);
-      setSpeakeasyInvited(stored.speakeasyInvited === true);
       const party = stored.party;
       const firstName =
         Array.isArray(party) && typeof party[0]?.name === "string"
@@ -380,8 +378,8 @@ export function TodayScreen({
   }, []);
 
   const eligible = useMemo(
-    () => eventsForGuest(effectiveTier, { speakeasyInvited, config }),
-    [effectiveTier, speakeasyInvited, config]
+    () => eventsForTier(effectiveTier, config),
+    [effectiveTier, config]
   );
   // A guest who hasn't replied yet (no RSVP doc) sees everything they're
   // eligible for; one who has sees only what they actually said yes to.

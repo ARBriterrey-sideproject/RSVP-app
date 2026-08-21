@@ -29,8 +29,7 @@ export type EventId =
   | "haldi"
   | "sangeet"
   | "wedding"
-  | "reception"
-  | "speakeasy";
+  | "reception";
 
 /**
  * Each event's own colour, as a token name rather than a value.
@@ -84,12 +83,6 @@ export interface WeddingEvent {
    * as a highlighted line on the timeline, not as a separate event.
    */
   highlight?: { label: string; at: string };
-  /**
-   * Invitation-only: never shown by tier, only to guests the couple has
-   * individually flagged. `tiers` must stay empty for these or the tier filter
-   * would leak them to everyone.
-   */
-  invitationOnly?: boolean;
 }
 
 /**
@@ -182,12 +175,6 @@ export interface WeddingConfig {
   logistics: LogisticsConfig;
   /** Chronological. The landing, timeline and day-picker render it as given. */
   events: WeddingEvent[];
-  /**
-   * Events no tier can reach, revealed per guest by a flag on their own
-   * document. Kept out of `events` so that a tier filter physically cannot
-   * surface one — see the security note on `eventsForGuest`.
-   */
-  invitationOnlyEvents: WeddingEvent[];
   /** Meals and other fixed points, merged into the timeline by time. */
   schedule: ScheduleItem[];
   party: { softCap: number };
@@ -256,4 +243,34 @@ export interface EmergencyContact {
   role: string;
   /** Stored as the couple types it; rendered into a `tel:` link. */
   phone: string;
+}
+
+/**
+ * A gathering the couple adds after the app is built, shown only to the guests
+ * they name one by one.
+ *
+ * Runtime data, not config: which private events exist is the couple's to
+ * decide on the day, and nothing about them changes the shape of the app. They
+ * live in `privateEvents/{id}` and reach a guest only through the
+ * `getMyPrivateEvents` callable, which reads the invite list off that guest's
+ * own RSVP document server-side.
+ *
+ * There is nothing to RSVP for. A private event is a reveal — the couple has
+ * already decided who's coming, so the app's job is to tell those guests where
+ * and when, not to ask them again. That is why this shares no fields with
+ * `WeddingEvent` beyond the obvious ones and carries no `tiers`: a tier filter
+ * that could reach one would defeat the entire point.
+ */
+export interface PrivateEvent {
+  id: string;
+  name: string;
+  /** ISO 8601 with offset, same as `WeddingEvent`. */
+  startsAt: string;
+  endsAt: string;
+  venue: string;
+  /** Free-text address for the Google Maps deep link. May be empty. */
+  mapsQuery: string;
+  dressCode: string;
+  /** Anything else the guest should know. May be empty. */
+  note: string;
 }

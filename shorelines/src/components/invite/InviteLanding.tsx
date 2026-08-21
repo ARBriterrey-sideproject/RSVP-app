@@ -109,12 +109,6 @@ export async function InviteLanding({
           >
             {t("ctaRsvp")}
           </Link>
-          <a
-            href="#travel"
-            className="rounded-pill border border-deeptide/50 p-[15px] font-sans text-[14.5px] font-medium leading-none text-deeptide transition-colors hover:bg-deeptide/7"
-          >
-            {t("ctaTravel")}
-          </a>
         </div>
 
         <SingleWave className="mx-auto mt-8 w-[70%] text-warmgold opacity-60" />
@@ -124,6 +118,12 @@ export async function InviteLanding({
         <p className="mt-6 font-sans text-[11px] tracking-wide text-driftwood-faint">
           {tCommon("madeBy")}
         </p>
+        <Link
+          href="/dashboard"
+          className="mt-2 inline-block font-sans text-[11px] tracking-wide text-driftwood-faint underline underline-offset-4"
+        >
+          {t("dashboardLogin")}
+        </Link>
       </section>
     </main>
   );
@@ -326,10 +326,11 @@ async function DayCard({ event }: { event: WeddingEvent }) {
 }
 
 /**
- * The mockup's second CTA reads "Travel & stay details" and, being a mockup,
- * goes nowhere — that screen exists in no version of the plan. Rather than
- * invent a route, the button jumps to this section, which shows the logistics
- * the app already holds.
+ * The mockup's second CTA read "Travel & stay details" and, being a mockup,
+ * went nowhere — that screen exists in no version of the plan. This section
+ * used to be the anchor target for that button; the button was dropped as
+ * dead weight (a guest can already scroll to it), but the `id="travel"` stays
+ * in case anything else ever wants to link here directly.
  *
  * Rail comes before air, which is the opposite of the mockup's ordering. That
  * is geography, not preference: Brahmapur is 16km away and Bhubaneswar is 170,

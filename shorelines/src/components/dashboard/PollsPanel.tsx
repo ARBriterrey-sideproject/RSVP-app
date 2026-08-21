@@ -26,8 +26,7 @@ import { Field, PanelNote } from "./panelKit";
 
 function eventName(eventId: EventId | null, config: WeddingConfig): string | null {
   if (!eventId) return null;
-  const all = [...config.events, ...config.invitationOnlyEvents];
-  return all.find((event) => event.id === eventId)?.name ?? eventId;
+  return config.events.find((event) => event.id === eventId)?.name ?? eventId;
 }
 
 function PollResultRow({ label, count, total }: { label: string; count: number; total: number }) {
@@ -130,7 +129,6 @@ export function PollsPanel({ config }: { config: WeddingConfig }) {
   const openPolls = useMemo(() => (polls ?? []).filter((p) => p.status === "open"), [polls]);
   const closedPolls = useMemo(() => (polls ?? []).filter((p) => p.status === "closed"), [polls]);
 
-  const allEvents = [...config.events, ...config.invitationOnlyEvents];
 
   const trimmedOptions = options.map((o) => o.trim()).filter(Boolean);
   const canCreate = question.trim().length > 0 && trimmedOptions.length >= 2;
@@ -224,7 +222,7 @@ export function PollsPanel({ config }: { config: WeddingConfig }) {
               className="mt-1 w-full bg-transparent font-sans text-[15px] leading-snug text-driftwood outline-none"
             >
               <option value="">Not tied to an event</option>
-              {allEvents.map((event) => (
+              {config.events.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.name}
                 </option>

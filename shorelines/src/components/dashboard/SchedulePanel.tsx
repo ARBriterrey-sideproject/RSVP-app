@@ -251,17 +251,8 @@ function RowEditor({
  * ---------------------------------------------------------------------- */
 
 function buildRows(live: WeddingConfig, printed: WeddingConfig): Row[] {
-  /*
-   * The speakeasy is editable here even though no tier can see it. It is a real
-   * event at a real time, and the couple moving it is exactly as ordinary as
-   * moving the Sangeet — the invitation-only rule governs who is told, not
-   * whether it exists.
-   */
-  const liveEvents = [...live.events, ...live.invitationOnlyEvents];
-  const printedEvents = [...printed.events, ...printed.invitationOnlyEvents];
-
-  const events: Row[] = liveEvents.flatMap((event) => {
-    const source = printedEvents.find((candidate) => candidate.id === event.id);
+  const events: Row[] = live.events.flatMap((event) => {
+    const source = printed.events.find((candidate) => candidate.id === event.id);
     if (!source) return [];
     return [
       {

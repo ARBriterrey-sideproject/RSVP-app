@@ -18,9 +18,15 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
 export const PROJECT_ID = "demo-shorelines";
 export const REGION = "asia-south1";
 
-const FIRESTORE_HOST = "127.0.0.1:8080";
-const AUTH_HOST = "127.0.0.1:9099";
-const FUNCTIONS_ORIGIN = "http://127.0.0.1:5001";
+// Ports match firebase.json, but stay overridable — see the note in
+// tests/rules/env.ts on why hardcoding 8080 doesn't survive contact with a
+// machine that has anything else running on it.
+const port = (name: string, fallback: number) =>
+  process.env[name] ?? String(fallback);
+
+const FIRESTORE_HOST = `127.0.0.1:${port("FIRESTORE_EMULATOR_PORT", 8080)}`;
+const AUTH_HOST = `127.0.0.1:${port("AUTH_EMULATOR_PORT", 9099)}`;
+const FUNCTIONS_ORIGIN = `http://127.0.0.1:${port("FUNCTIONS_EMULATOR_PORT", 5001)}`;
 
 process.env.FIRESTORE_EMULATOR_HOST ??= FIRESTORE_HOST;
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= AUTH_HOST;

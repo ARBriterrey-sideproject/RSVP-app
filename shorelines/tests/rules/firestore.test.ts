@@ -158,6 +158,58 @@ describe("config/live — the runtime overlay", () => {
   });
 });
 
+describe("privateEvents/{eventId}", () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "privateEvents", "e1"), {
+        name: "Late dinner on the terrace",
+        startsAt: "2026-12-29T22:00:00+05:30",
+        endsAt: "2026-12-29T23:30:00+05:30",
+      });
+    });
+  });
+
+  it("is readable and listable by staff, down to a coordinator", async () => {
+    const coordinatorDb = testEnv
+      .authenticatedContext("coordinator-1", { role: "coordinator" })
+      .firestore();
+    await assertSucceeds(getDoc(doc(coordinatorDb, "privateEvents", "e1")));
+    await assertSucceeds(getDocs(collection(coordinatorDb, "privateEvents")));
+  });
+
+  /**
+   * The whole point of the collection. A guest never reads it — not even the
+   * one who's been invited — because knowing an event exists is the thing
+   * being kept private. getMyPrivateEvents is the only path in, and it reads
+   * the guest's own document with the Admin SDK to decide what to hand back.
+   */
+  it("is invisible to a guest, invited or not, and to a signed-out visitor", async () => {
+    const guestDb = testEnv.authenticatedContext("guest-1").firestore();
+    await assertFails(getDoc(doc(guestDb, "privateEvents", "e1")));
+    await assertFails(getDocs(collection(guestDb, "privateEvents")));
+
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anon, "privateEvents", "e1")));
+  });
+
+  it("is never client-writable, admin included — the callables are the only path", async () => {
+    const adminDb = testEnv
+      .authenticatedContext("admin-1", { role: "admin" })
+      .firestore();
+    await assertFails(setDoc(doc(adminDb, "privateEvents", "e2"), { name: "New" }));
+    await assertFails(updateDoc(doc(adminDb, "privateEvents", "e1"), { name: "Edited" }));
+    await assertFails(deleteDoc(doc(adminDb, "privateEvents", "e1")));
+
+    const coupleDb = testEnv
+      .authenticatedContext("couple-1", { role: "couple" })
+      .firestore();
+    await assertFails(updateDoc(doc(coupleDb, "privateEvents", "e1"), { name: "Edited" }));
+
+    const guestDb = testEnv.authenticatedContext("guest-1").firestore();
+    await assertFails(setDoc(doc(guestDb, "privateEvents", "e3"), { name: "Mine now" }));
+  });
+});
+
 describe("polls/{pollId} (v2)", () => {
   it("is readable by any signed-in guest, not by a signed-out visitor", async () => {
     const guestDb = testEnv.authenticatedContext("guest-1").firestore();

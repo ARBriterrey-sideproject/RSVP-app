@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { EVENTS, SPEAKEASY, tierCode } from "@/content/wedding";
+import { EVENTS, tierCode } from "@/content/wedding";
 import type { EventId } from "@/content/wedding";
 import { deleteResponse, flagResponse } from "@/lib/firebase/responses";
 import { leadName, listRsvps, type RsvpRecord } from "@/lib/firebase/rsvps";
@@ -16,8 +16,6 @@ import { PanelNote } from "./panelKit";
  * a party is treated as attending or not attending an event as a unit, same
  * as `mealsForEvents` assumes on the guest side.
  */
-
-const ALL_EVENTS = [...EVENTS, SPEAKEASY];
 
 export function RepliesPanel() {
   const { allows } = useStaffAuth();
@@ -132,7 +130,7 @@ export function RepliesPanel() {
       ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {ALL_EVENTS.map((event) => {
+        {EVENTS.map((event) => {
           const s = stats.get(event.id);
           return (
             <div
@@ -275,7 +273,7 @@ function tierLabel(tier: RsvpRecord["tier"]): string {
 }
 
 function attendingLabel(attendance: RsvpRecord["perEventAttendance"]): string {
-  const yes = ALL_EVENTS.filter((event) => attendance[event.id]).map(
+  const yes = EVENTS.filter((event) => attendance[event.id]).map(
     (event) => event.name
   );
   return yes.length > 0 ? yes.join(", ") : "Nothing yet";
@@ -290,12 +288,12 @@ interface EventStats {
 
 function statsByEvent(records: RsvpRecord[]): Map<EventId, EventStats> {
   const stats = new Map<EventId, EventStats>();
-  for (const event of ALL_EVENTS) {
+  for (const event of EVENTS) {
     stats.set(event.id, { headcount: 0, veg: 0, nonVeg: 0, parties: 0 });
   }
 
   for (const record of records) {
-    for (const event of ALL_EVENTS) {
+    for (const event of EVENTS) {
       if (!record.perEventAttendance[event.id]) continue;
       const s = stats.get(event.id)!;
       s.headcount += record.partySize;

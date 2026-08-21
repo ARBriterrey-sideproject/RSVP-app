@@ -11,14 +11,24 @@ import {
 
 /**
  * Hostile-case coverage for functions/src/index.ts. Every case here is a
- * client the real app never ships — a forged role, a claimed tier, a
- * speakeasy RSVP nobody invited them to — because the rules deny these
- * writes outright and the callable is the only thing left standing between
- * "the UI would never send this" and "so nothing checks for it".
+ * client the real app never ships — a forged role, a claimed tier, a private
+ * event nobody named them for — because the rules deny these writes outright
+ * and the callable is the only thing left standing between "the UI would never
+ * send this" and "so nothing checks for it".
+ *
+ * Private events have no equivalent of the tier-stripping cases below, and
+ * that absence is the design: they never travel in an RSVP payload at all, so
+ * there is nothing for a lying client to claim. The reveal happens on the
+ * server, in getMyPrivateEvents, off the caller's own document.
  */
 
 async function cleanupUid(uid: string) {
   await adminDb().collection("rsvps").doc(uid).delete().catch(() => {});
+}
+
+async function cleanupPrivateEvents() {
+  const docs = await adminDb().collection("privateEvents").get();
+  await Promise.all(docs.docs.map((doc) => doc.ref.delete().catch(() => {})));
 }
 
 const createdAuthUids: string[] = [];
@@ -84,56 +94,6 @@ describe("submitRsvp", () => {
 
     const doc = await adminDb().collection("rsvps").doc(uid).get();
     expect(doc.get("tier")).toBe("reception_only");
-    await cleanupUid(uid);
-  });
-
-  it("strips a speakeasy claim from an uninvited guest, server-side, from both the doc and the public mirror", async () => {
-    const uid = freshUid("guest");
-    const res = await callFunction(
-      "submitRsvp",
-      {
-        tier: "full",
-        party: [{ name: "Rohan", ageGroup: "adult", dietary: "vegetarian" }],
-        perEventAttendance: { wedding: true, speakeasy: true },
-      },
-      forgedToken(uid)
-    );
-    expect(res.status).toBe(200);
-    const { shareCode } = res.result as { shareCode: string };
-
-    const doc = await adminDb().collection("rsvps").doc(uid).get();
-    expect(doc.get("perEventAttendance.speakeasy")).toBeUndefined();
-    expect(doc.get("perEventAttendance.wedding")).toBe(true);
-
-    const invite = await adminDb().collection("invites").doc(shareCode).get();
-    expect(invite.get("perEventAttendance.speakeasy")).toBeUndefined();
-
-    await cleanupUid(uid);
-    await adminDb().collection("invites").doc(shareCode).delete().catch(() => {});
-  });
-
-  it("honours the speakeasy claim once the couple has flagged the guest for it", async () => {
-    const uid = freshUid("guest");
-    // Seed the flag the way setSpeakeasyInvite would have written it — the
-    // callable is what re-checks this, not the client, so seeding directly is
-    // the right way to set up the precondition without also testing that path.
-    // A tier must come along with it: submitRsvp treats an existing doc's
-    // "tier" as authoritative and would otherwise try to write `undefined`.
-    await adminDb().collection("rsvps").doc(uid).set({ tier: "full", speakeasyInvited: true });
-
-    const res = await callFunction(
-      "submitRsvp",
-      {
-        tier: "full",
-        party: [{ name: "Rohan", ageGroup: "adult", dietary: "vegetarian" }],
-        perEventAttendance: { wedding: true, speakeasy: true },
-      },
-      forgedToken(uid)
-    );
-    expect(res.status).toBe(200);
-
-    const doc = await adminDb().collection("rsvps").doc(uid).get();
-    expect(doc.get("perEventAttendance.speakeasy")).toBe(true);
     await cleanupUid(uid);
   });
 
@@ -239,49 +199,300 @@ describe("recoverRsvp", () => {
   });
 });
 
-describe("setSpeakeasyInvite", () => {
-  it("refuses a coordinator, even one claiming a role for itself", async () => {
-    const targetUid = freshUid("guest");
-    await adminDb().collection("rsvps").doc(targetUid).set({ tier: "full" });
+/**
+ * Private events. The security question these answer is not "can a guest write
+ * one" — the rules already deny every client write — but "can a guest who was
+ * never named for one still get it back". Everything hangs off
+ * `invitedPrivateEventIds` on the *caller's own* RSVP document, so the tests
+ * that matter are the ones where a caller asks for something that isn't listed
+ * there.
+ */
+const COUPLE = () => forgedToken(freshUid("staff"), { role: "couple" });
+const COORDINATOR = () => forgedToken(freshUid("staff"), { role: "coordinator" });
 
-    const res = await callFunction(
-      "setSpeakeasyInvite",
-      { ownerUid: targetUid, invited: true },
-      forgedToken(freshUid("staff"), { role: "coordinator" })
-    );
+/** A valid payload; individual tests override the field they're probing. */
+function eventPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    name: "Late dinner on the terrace",
+    startsAt: "2026-12-29T22:00:00+05:30",
+    endsAt: "2026-12-29T23:30:00+05:30",
+    venue: "The old lighthouse",
+    ...overrides,
+  };
+}
+
+async function createEvent(overrides: Record<string, unknown> = {}): Promise<string> {
+  const res = await callFunction<{ id: string }>(
+    "savePrivateEvent",
+    eventPayload(overrides),
+    COUPLE()
+  );
+  expect(res.status).toBe(200);
+  return res.result!.id;
+}
+
+describe("savePrivateEvent", () => {
+  afterEach(cleanupPrivateEvents);
+
+  it("refuses a coordinator — a coordinator arranging cars has no business knowing it exists", async () => {
+    const res = await callFunction("savePrivateEvent", eventPayload(), COORDINATOR());
     expect(res.status).toBe(403);
     expect(res.error?.status).toBe("PERMISSION_DENIED");
-
-    await cleanupUid(targetUid);
   });
 
-  it("lets the couple invite a guest, and revoking clears their acceptance", async () => {
-    const targetUid = freshUid("guest");
-    await adminDb()
-      .collection("rsvps")
-      .doc(targetUid)
-      .set({ tier: "full", perEventAttendance: { speakeasy: true } });
+  it("refuses an unauthenticated caller", async () => {
+    const res = await callFunction("savePrivateEvent", eventPayload());
+    expect(res.status).toBe(403);
+  });
+
+  it("creates one for the couple, and edits it in place when given its id", async () => {
+    const id = await createEvent();
+
+    const edit = await callFunction<{ id: string }>(
+      "savePrivateEvent",
+      eventPayload({ id, name: "Late dinner, moved indoors" }),
+      COUPLE()
+    );
+    expect(edit.status).toBe(200);
+    expect(edit.result?.id).toBe(id);
+
+    const docs = await adminDb().collection("privateEvents").get();
+    expect(docs.size).toBe(1);
+    expect(docs.docs[0].get("name")).toBe("Late dinner, moved indoors");
+  });
+
+  it("rejects a window that ends before it starts", async () => {
+    const res = await callFunction(
+      "savePrivateEvent",
+      eventPayload({
+        startsAt: "2026-12-29T23:30:00+05:30",
+        endsAt: "2026-12-29T22:00:00+05:30",
+      }),
+      COUPLE()
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("INVALID_ARGUMENT");
+    // Asserted on the message, not just the code: half the payload's fields are
+    // validated with the same code, so a typo'd field name would otherwise give
+    // a green test for entirely the wrong reason.
+    expect(res.error?.message).toContain("end time");
+  });
+
+  it("refuses an edit naming an event that no longer exists", async () => {
+    const res = await callFunction(
+      "savePrivateEvent",
+      eventPayload({ id: "never-existed" }),
+      COUPLE()
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.message).toContain("no longer exists");
+  });
+
+  it("enforces the 20-event cap on creation but still allows edits at the cap", async () => {
+    // Seeded straight in rather than through 20 round trips — the cap check
+    // counts documents, and how they got there isn't what's under test.
+    const batch = adminDb().batch();
+    for (let i = 0; i < 20; i += 1) {
+      batch.set(adminDb().collection("privateEvents").doc(`seeded-${i}`), {
+        name: `Seeded ${i}`,
+        startsAt: "2026-12-29T22:00:00+05:30",
+        endsAt: "2026-12-29T23:00:00+05:30",
+      });
+    }
+    await batch.commit();
+
+    const created = await callFunction("savePrivateEvent", eventPayload(), COUPLE());
+    expect(created.status).toBe(400);
+    expect(created.error?.message).toContain("at most 20");
+
+    const edited = await callFunction(
+      "savePrivateEvent",
+      eventPayload({ id: "seeded-0", name: "Still editable" }),
+      COUPLE()
+    );
+    expect(edited.status).toBe(200);
+  });
+});
+
+describe("setPrivateEventInvite", () => {
+  afterEach(cleanupPrivateEvents);
+
+  it("refuses a coordinator", async () => {
+    const id = await createEvent();
+    const guestUid = freshUid("guest");
+    await adminDb().collection("rsvps").doc(guestUid).set({ tier: "full" });
+
+    const res = await callFunction(
+      "setPrivateEventInvite",
+      { eventId: id, ownerUid: guestUid, invited: true },
+      COORDINATOR()
+    );
+    expect(res.status).toBe(403);
+
+    await cleanupUid(guestUid);
+  });
+
+  it("names a guest and takes them off again", async () => {
+    const id = await createEvent();
+    const guestUid = freshUid("guest");
+    await adminDb().collection("rsvps").doc(guestUid).set({ tier: "full" });
 
     const invite = await callFunction(
-      "setSpeakeasyInvite",
-      { ownerUid: targetUid, invited: true },
-      forgedToken(freshUid("staff"), { role: "couple" })
+      "setPrivateEventInvite",
+      { eventId: id, ownerUid: guestUid, invited: true },
+      COUPLE()
     );
     expect(invite.status).toBe(200);
-    let doc = await adminDb().collection("rsvps").doc(targetUid).get();
-    expect(doc.get("speakeasyInvited")).toBe(true);
+    let doc = await adminDb().collection("rsvps").doc(guestUid).get();
+    expect(doc.get("invitedPrivateEventIds")).toEqual([id]);
 
     const revoke = await callFunction(
-      "setSpeakeasyInvite",
-      { ownerUid: targetUid, invited: false },
-      forgedToken(freshUid("staff"), { role: "couple" })
+      "setPrivateEventInvite",
+      { eventId: id, ownerUid: guestUid, invited: false },
+      COUPLE()
     );
     expect(revoke.status).toBe(200);
-    doc = await adminDb().collection("rsvps").doc(targetUid).get();
-    expect(doc.get("speakeasyInvited")).toBe(false);
-    expect(doc.get("perEventAttendance.speakeasy")).toBeUndefined();
+    doc = await adminDb().collection("rsvps").doc(guestUid).get();
+    expect(doc.get("invitedPrivateEventIds")).toEqual([]);
 
-    await cleanupUid(targetUid);
+    await cleanupUid(guestUid);
+  });
+
+  it("refuses an event or a guest that doesn't exist", async () => {
+    const id = await createEvent();
+    const guestUid = freshUid("guest");
+    await adminDb().collection("rsvps").doc(guestUid).set({ tier: "full" });
+
+    const noEvent = await callFunction(
+      "setPrivateEventInvite",
+      { eventId: "never-existed", ownerUid: guestUid, invited: true },
+      COUPLE()
+    );
+    expect(noEvent.status).toBe(400);
+    expect(noEvent.error?.message).toContain("no longer exists");
+
+    const noGuest = await callFunction(
+      "setPrivateEventInvite",
+      { eventId: id, ownerUid: freshUid("never-replied"), invited: true },
+      COUPLE()
+    );
+    expect(noGuest.status).toBe(400);
+    expect(noGuest.error?.message).toContain("not replied");
+
+    await cleanupUid(guestUid);
+  });
+});
+
+describe("deletePrivateEvent", () => {
+  afterEach(cleanupPrivateEvents);
+
+  it("refuses a coordinator", async () => {
+    const id = await createEvent();
+    const res = await callFunction("deletePrivateEvent", { id }, COORDINATOR());
+    expect(res.status).toBe(403);
+  });
+
+  it("removes the event and strips the id off every guest who was named for it", async () => {
+    const id = await createEvent();
+    const uids = [freshUid("guest"), freshUid("guest")];
+    for (const uid of uids) {
+      await adminDb().collection("rsvps").doc(uid).set({ tier: "full" });
+      await callFunction(
+        "setPrivateEventInvite",
+        { eventId: id, ownerUid: uid, invited: true },
+        COUPLE()
+      );
+    }
+
+    const res = await callFunction<{ revoked: number }>(
+      "deletePrivateEvent",
+      { id },
+      COUPLE()
+    );
+    expect(res.status).toBe(200);
+    expect(res.result?.revoked).toBe(2);
+
+    expect((await adminDb().collection("privateEvents").doc(id).get()).exists).toBe(false);
+    for (const uid of uids) {
+      const doc = await adminDb().collection("rsvps").doc(uid).get();
+      expect(doc.get("invitedPrivateEventIds")).toEqual([]);
+      await cleanupUid(uid);
+    }
+  });
+});
+
+describe("getMyPrivateEvents", () => {
+  afterEach(cleanupPrivateEvents);
+
+  it("refuses an unauthenticated caller", async () => {
+    const res = await callFunction("getMyPrivateEvents", {});
+    expect(res.status).toBe(401);
+    expect(res.error?.status).toBe("UNAUTHENTICATED");
+  });
+
+  it("returns only the events this caller was named for, never the others", async () => {
+    const mine = await createEvent({ name: "Mine" });
+    await createEvent({ name: "Not mine" });
+
+    const uid = freshUid("guest");
+    await adminDb().collection("rsvps").doc(uid).set({ tier: "full" });
+    await callFunction(
+      "setPrivateEventInvite",
+      { eventId: mine, ownerUid: uid, invited: true },
+      COUPLE()
+    );
+
+    const res = await callFunction<{ events: { id: string; name: string }[] }>(
+      "getMyPrivateEvents",
+      {},
+      forgedToken(uid)
+    );
+    expect(res.status).toBe(200);
+    expect(res.result?.events.map((e) => e.name)).toEqual(["Mine"]);
+
+    await cleanupUid(uid);
+  });
+
+  it("gives a guest who was never named — and one who never replied — an empty list, not an error", async () => {
+    await createEvent();
+
+    const replied = freshUid("guest");
+    await adminDb().collection("rsvps").doc(replied).set({ tier: "full" });
+    const named = await callFunction<{ events: unknown[] }>(
+      "getMyPrivateEvents",
+      {},
+      forgedToken(replied)
+    );
+    expect(named.status).toBe(200);
+    expect(named.result?.events).toEqual([]);
+
+    const stranger = await callFunction<{ events: unknown[] }>(
+      "getMyPrivateEvents",
+      {},
+      forgedToken(freshUid("never-replied"))
+    );
+    expect(stranger.status).toBe(200);
+    expect(stranger.result?.events).toEqual([]);
+
+    await cleanupUid(replied);
+  });
+
+  it("ignores an id left on a guest document whose event has since been deleted", async () => {
+    const uid = freshUid("guest");
+    await adminDb()
+      .collection("rsvps")
+      .doc(uid)
+      .set({ tier: "full", invitedPrivateEventIds: ["deleted-long-ago"] });
+
+    const res = await callFunction<{ events: unknown[] }>(
+      "getMyPrivateEvents",
+      {},
+      forgedToken(uid)
+    );
+    expect(res.status).toBe(200);
+    expect(res.result?.events).toEqual([]);
+
+    await cleanupUid(uid);
   });
 });
 
@@ -433,6 +644,192 @@ describe("getStaffRoster", () => {
     expect(res.status).toBe(200);
     expect(res.result?.email.length).toBeGreaterThan(0);
     expect(res.result?.phone.length).toBeGreaterThan(0);
+  });
+});
+
+describe("requestStaffAccess / decideStaffAccess", () => {
+  const REQUESTER = "wants-in@example.com";
+  const IDENTITY = `email:${REQUESTER}`;
+
+  async function cleanupAccess() {
+    const docs = await adminDb().collection("staffAccess").get();
+    await Promise.all(docs.docs.map((doc) => doc.ref.delete().catch(() => {})));
+  }
+  afterEach(cleanupAccess);
+
+  async function seedRequester(emailVerified = true) {
+    await deleteExistingUser({ email: REQUESTER });
+    const user = await adminAuth().createUser({
+      email: REQUESTER,
+      emailVerified,
+      password: "not-used-goes-through-forged-token",
+    });
+    createdAuthUids.push(user.uid);
+    return user;
+  }
+
+  it("refuses to queue a request from an unverified address", async () => {
+    const user = await seedRequester(false);
+    const res = await callFunction(
+      "requestStaffAccess",
+      {},
+      forgedToken(user.uid, { email: REQUESTER, email_verified: false })
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("FAILED_PRECONDITION");
+
+    const doc = await adminDb().collection("staffAccess").doc(IDENTITY).get();
+    expect(doc.exists).toBe(false);
+  });
+
+  it("queues a pending request that grants nothing on its own", async () => {
+    const user = await seedRequester();
+    const res = await callFunction<{ status: string }>(
+      "requestStaffAccess",
+      {},
+      forgedToken(user.uid, { email: REQUESTER, email_verified: true })
+    );
+    expect(res.status).toBe(200);
+    expect(res.result?.status).toBe("pending");
+
+    // The row exists, but syncRole still hands back no role — pending is not
+    // a lesser role, it is the absence of one.
+    const synced = await callFunction<{ role: string | null; access: string | null }>(
+      "syncRole",
+      {},
+      forgedToken(user.uid, { email: REQUESTER, email_verified: true })
+    );
+    expect(synced.result?.role).toBeNull();
+    expect(synced.result?.access).toBe("pending");
+    expect((await adminAuth().getUser(user.uid)).customClaims?.role ?? null).toBeNull();
+  });
+
+  it("refuses a decision from anyone below admin", async () => {
+    const user = await seedRequester();
+    await callFunction("requestStaffAccess", {}, forgedToken(user.uid, { email: REQUESTER, email_verified: true }));
+
+    const res = await callFunction(
+      "decideStaffAccess",
+      { identity: IDENTITY, role: "admin" },
+      forgedToken(freshUid("staff"), { role: "couple" })
+    );
+    expect(res.status).toBe(403);
+
+    const doc = await adminDb().collection("staffAccess").doc(IDENTITY).get();
+    expect(doc.get("status")).toBe("pending");
+  });
+
+  it("grants the approved role on the requester's next sync, and revokes it again", async () => {
+    const user = await seedRequester();
+    await callFunction("requestStaffAccess", {}, forgedToken(user.uid, { email: REQUESTER, email_verified: true }));
+
+    const approve = await callFunction<{ applied: boolean }>(
+      "decideStaffAccess",
+      { identity: IDENTITY, role: "coordinator" },
+      forgedToken(freshUid("admin"), { role: "admin", email: "someone-else@example.com" })
+    );
+    expect(approve.status).toBe(200);
+    expect(approve.result?.applied).toBe(true);
+    expect((await adminAuth().getUser(user.uid)).customClaims?.role).toBe("coordinator");
+
+    const synced = await callFunction<{ role: string | null; access: string | null }>(
+      "syncRole",
+      {},
+      forgedToken(user.uid, { email: REQUESTER, email_verified: true })
+    );
+    expect(synced.result?.role).toBe("coordinator");
+    expect(synced.result?.access).toBe("approved");
+
+    // Revoking is the same endpoint with a null role, and it must actually
+    // strip the claim rather than leave a stale one in the token.
+    const revoke = await callFunction(
+      "decideStaffAccess",
+      { identity: IDENTITY, role: null },
+      forgedToken(freshUid("admin"), { role: "admin", email: "someone-else@example.com" })
+    );
+    expect(revoke.status).toBe(200);
+    expect((await adminAuth().getUser(user.uid)).customClaims?.role ?? null).toBeNull();
+
+    const after = await callFunction<{ role: string | null; access: string | null }>(
+      "syncRole",
+      {},
+      forgedToken(user.uid, { email: REQUESTER, email_verified: true })
+    );
+    expect(after.result?.role).toBeNull();
+    expect(after.result?.access).toBe("denied");
+  });
+
+  it("refuses to approve an identity the env roster already pins", async () => {
+    // A row here would be written and then never read — syncRole returns on
+    // the roster hit — so a refusal beats a decision that silently does nothing.
+    const res = await callFunction(
+      "decideStaffAccess",
+      { identity: "email:coordinator@example.com", role: "admin" },
+      forgedToken(freshUid("admin"), { role: "admin", email: "someone-else@example.com" })
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("FAILED_PRECONDITION");
+  });
+
+  it("refuses an admin deciding their own access", async () => {
+    const user = await seedRequester();
+    await callFunction("requestStaffAccess", {}, forgedToken(user.uid, { email: REQUESTER, email_verified: true }));
+
+    const res = await callFunction(
+      "decideStaffAccess",
+      { identity: IDENTITY, role: "admin" },
+      forgedToken(user.uid, { role: "admin", email: REQUESTER, email_verified: true })
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("FAILED_PRECONDITION");
+  });
+
+  it("rejects a malformed identity rather than creating a row for it", async () => {
+    const res = await callFunction(
+      "decideStaffAccess",
+      { identity: "wants-in@example.com", role: "coordinator" },
+      forgedToken(freshUid("admin"), { role: "admin", email: "someone-else@example.com" })
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("INVALID_ARGUMENT");
+  });
+
+  it("refuses a role the roster vocabulary doesn't contain", async () => {
+    const user = await seedRequester();
+    await callFunction("requestStaffAccess", {}, forgedToken(user.uid, { email: REQUESTER, email_verified: true }));
+
+    const res = await callFunction(
+      "decideStaffAccess",
+      { identity: IDENTITY, role: "superadmin" },
+      forgedToken(freshUid("admin"), { role: "admin", email: "someone-else@example.com" })
+    );
+    expect(res.status).toBe(400);
+    expect(res.error?.status).toBe("INVALID_ARGUMENT");
+  });
+
+  it("never lets the collection outrank the env roster", async () => {
+    // Even if a row for a rostered address somehow exists — a bad migration,
+    // a direct Admin SDK write — syncRole must still answer with the roster.
+    await deleteExistingUser({ email: "coordinator@example.com" });
+    const user = await adminAuth().createUser({
+      email: "coordinator@example.com",
+      emailVerified: true,
+      password: "not-used-goes-through-forged-token",
+    });
+    createdAuthUids.push(user.uid);
+    await adminDb().collection("staffAccess").doc("email:coordinator@example.com").set({
+      kind: "email",
+      value: "coordinator@example.com",
+      status: "approved",
+      role: "admin",
+    });
+
+    const res = await callFunction<{ role: string | null }>(
+      "syncRole",
+      {},
+      forgedToken(user.uid, { email: "coordinator@example.com", email_verified: true })
+    );
+    expect(res.result?.role).toBe("coordinator");
   });
 });
 

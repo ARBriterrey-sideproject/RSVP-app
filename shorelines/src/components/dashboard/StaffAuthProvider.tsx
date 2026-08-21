@@ -14,6 +14,7 @@ import type { Capability, StaffRole } from "@/lib/auth/roles";
 import { can } from "@/lib/auth/roles";
 import { getFirebase } from "@/lib/firebase/client";
 import { readRoleFromToken, signOutStaff, syncRole } from "@/lib/firebase/staffAuth";
+import type { StaffAccessStatus } from "@/lib/firebase/staffRoster";
 
 /**
  * Resolves "who is this and what may they do" in one place.
@@ -23,9 +24,12 @@ import { readRoleFromToken, signOutStaff, syncRole } from "@/lib/firebase/staffA
  *
  *  - signed-out  — nobody, or they signed out
  *  - unverified  — registered with a password, hasn't clicked the email link
- *  - unrostered  — a valid account that isn't on the staff roster (including a
- *                  curious guest who opened /dashboard while signed in by phone)
- *  - ready       — on the roster, claim in the token
+ *  - unrostered  — a valid account with no role (including a curious guest who
+ *                  opened /dashboard while signed in by phone). Its `access`
+ *                  field says whether they've asked an admin for one, which is
+ *                  three visibly different screens: never asked, waiting, and
+ *                  turned down.
+ *  - ready       — has a role, claim in the token
  *
  * Collapsing unverified and unrostered into one "no access" state was tempting
  * and wrong: they need completely different instructions on screen.
@@ -34,7 +38,7 @@ export type StaffAuthState =
   | { status: "loading" }
   | { status: "signed-out" }
   | { status: "unverified"; user: User }
-  | { status: "unrostered"; user: User }
+  | { status: "unrostered"; user: User; access: StaffAccessStatus | null }
   | { status: "ready"; user: User; role: StaffRole; photoAccess: boolean };
 
 interface StaffAuthContextValue {
@@ -75,9 +79,11 @@ export function StaffAuthProvider({ children }: { children: React.ReactNode }) {
     // value rather than re-derived. That's fine: listEventPhotos re-checks
     // the grant server-side on every call, so this is a UI hint only.
     let photoAccess = false;
+    let access: StaffAccessStatus | null = null;
     try {
       const synced = await syncRole(user);
       photoAccess = synced.photoAccess;
+      access = synced.access;
     } catch (error) {
       // The server refuses to grant a role to an unverified address. That's
       // not a failure to report as one — it's a state with its own screen.
@@ -95,7 +101,9 @@ export function StaffAuthProvider({ children }: { children: React.ReactNode }) {
 
     const role = await readRoleFromToken(user);
     commit(
-      role ? { status: "ready", user, role, photoAccess } : { status: "unrostered", user }
+      role
+        ? { status: "ready", user, role, photoAccess }
+        : { status: "unrostered", user, access }
     );
   }, []);
 

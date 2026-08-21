@@ -122,17 +122,6 @@ export const SCHEDULE_ITEMS: ScheduleItem[] = weddingConfig.schedule;
 export const PARTY_SIZE_SOFT_CAP = weddingConfig.party.softCap;
 
 /**
- * The invitation-only event, kept as a single export because the app has
- * exactly one and every call site names it.
- *
- * SECURITY: this is copy, not an access decision. It reaches a guest only
- * through `eventsForGuest`, and only when their own Firestore document carries
- * the flag. Never render it off a URL, a prop default, or anything a link can
- * carry.
- */
-export const SPEAKEASY: WeddingEvent = weddingConfig.invitationOnlyEvents[0];
-
-/**
  * Travel copy, composed from config rather than written out.
  *
  * `note` and `stay.title` used to be hand-written English sentences with the
@@ -298,34 +287,7 @@ export function eventsForTier(
   return config.events.filter((event) => event.tiers.includes(tier));
 }
 
-/**
- * Everything one specific guest may see: their tier's events, plus any
- * invitation-only event the couple has flagged them for.
- *
- * Use this anywhere a real guest is on screen; `eventsForTier` alone answers
- * "what does this link carry", which is a different and always-public question.
- * Invitation-only events are spliced in chronologically rather than appended,
- * because a schedule that runs 10am, 6pm, 10pm, 10am reads as a bug.
- *
- * SECURITY: `speakeasyInvited` must come from the guest's own Firestore
- * document, never from a URL, prop default or anything a link can carry. It is
- * re-checked inside the callable's transaction — this function is UI only.
- */
-export function eventsForGuest(
-  tier: Tier,
-  {
-    speakeasyInvited = false,
-    config = weddingConfig,
-  }: { speakeasyInvited?: boolean; config?: WeddingConfig } = {}
-): WeddingEvent[] {
-  const events = eventsForTier(tier, config);
-  if (!speakeasyInvited) return events;
-  return [...events, ...config.invitationOnlyEvents].sort((a, b) =>
-    a.startsAt.localeCompare(b.startsAt)
-  );
-}
-
-export function mapsUrl(event: WeddingEvent): string {
+export function mapsUrl(event: { mapsQuery: string }): string {
   return `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
 }
 
@@ -380,10 +342,8 @@ export function scheduleTimeline(
 const WEDDING_WINDOW_GRACE_MS = 6 * 60 * 60 * 1000;
 
 /**
- * The stretch of real time the "Today" companion screen covers, bounded by
- * the earliest event start and the latest event end across both the public
- * events and the invitation-only ones — a guest with nothing left but the
- * speakeasy shouldn't be dropped back on the invite while it's still running.
+ * The stretch of real time the "Today" companion screen covers, bounded by the
+ * earliest event start and the latest event end.
  *
  * `Date.parse`/millisecond arithmetic only, deliberately: every stored instant
  * already carries its own UTC offset, so comparing timestamps needs no zone
@@ -393,7 +353,7 @@ export function weddingWindow(config: WeddingConfig = weddingConfig): {
   startsAt: Date;
   endsAt: Date;
 } {
-  const events = [...config.events, ...config.invitationOnlyEvents];
+  const events = config.events;
   const startsAt = new Date(
     Math.min(...events.map((e) => Date.parse(e.startsAt)))
   );

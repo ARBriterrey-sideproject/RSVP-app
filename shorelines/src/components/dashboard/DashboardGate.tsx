@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { ROLE_COPY } from "@/lib/auth/roles";
 import { resendVerification } from "@/lib/firebase/staffAuth";
+import { requestStaffAccess, type StaffAccessStatus } from "@/lib/firebase/staffRoster";
 import { StaffSignIn } from "./StaffSignIn";
 import { useStaffAuth } from "./StaffAuthProvider";
 
 /**
- * Decides which of the five screens a visitor to /dashboard gets.
+ * Decides which screen a visitor to /dashboard gets.
  *
  * This is a convenience gate, not the security boundary. Every one of these
  * states is trivially bypassable by editing client state — what actually stops
@@ -33,7 +34,12 @@ export function DashboardGate({ children }: { children: React.ReactNode }) {
       return <VerifyEmail />;
 
     case "unrostered":
-      return <NoAccess email={state.user.email} />;
+      return (
+        <NoAccess
+          email={state.user.email ?? state.user.phoneNumber}
+          access={state.access}
+        />
+      );
 
     case "ready":
       return <>{children}</>;
@@ -92,23 +98,88 @@ function VerifyEmail() {
   );
 }
 
-function NoAccess({ email }: { email: string | null }) {
+/**
+ * The signed-in-but-no-role screen, in its three flavours. They differ only in
+ * copy and in whether the primary button asks for access or re-checks for it —
+ * but that difference is the whole feature: "we don't know you" and "we know
+ * you and someone is deciding" are very different things to read at 11pm the
+ * night before a wedding.
+ */
+function NoAccess({
+  email,
+  access,
+}: {
+  email: string | null;
+  access: StaffAccessStatus | null;
+}) {
   const { signOut, refresh } = useStaffAuth();
+  const [busy, setBusy] = useState(false);
+  const [asked, setAsked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // `approved` reaching this screen would mean the row says yes but the token
+  // carries no claim — a refresh away from resolving, so it reads as pending.
+  const waiting = asked || access === "pending" || access === "approved";
+  const denied = !asked && access === "denied";
 
   return (
     <Centered>
-      <Heading>No access</Heading>
+      <Heading>{waiting ? "Waiting on approval" : "No access"}</Heading>
       <Body>
         <span className="text-driftwood">{email}</span> is signed in, but it
-        isn&apos;t on the list for this dashboard.
-      </Body>
-      <Body>
-        If you should be, ask {ROLE_COPY.couple.label.toLowerCase()} to add this
-        exact address — then sign out and back in.
+        doesn&apos;t have a role on this dashboard.
       </Body>
 
+      {waiting ? (
+        <Body>
+          Your request is with {ROLE_COPY.admin.label.toLowerCase()}. Once
+          it&apos;s approved, check again here — there&apos;s nothing else you
+          need to do.
+        </Body>
+      ) : denied ? (
+        <Body>
+          A previous request for this account was turned down. If that
+          wasn&apos;t expected, speak to {ROLE_COPY.couple.label.toLowerCase()}
+          {" "}before asking again.
+        </Body>
+      ) : (
+        <Body>
+          If you&apos;re part of the wedding team, ask for access below.{" "}
+          {ROLE_COPY.admin.label} decides what you can see — nothing is granted
+          just by asking.
+        </Body>
+      )}
+
+      {error ? (
+        <p className="mt-3 font-sans text-sm text-coral-deep">{error}</p>
+      ) : null}
+
       <div className="mt-6 flex flex-col gap-2.5">
-        <Primary onClick={() => void refresh()}>Check again</Primary>
+        {waiting ? (
+          <Primary onClick={() => void refresh()}>Check again</Primary>
+        ) : (
+          <Primary
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              setError(null);
+              try {
+                await requestStaffAccess();
+                setAsked(true);
+              } catch (cause) {
+                setError(
+                  cause instanceof Error
+                    ? cause.message
+                    : "Couldn't send that request. Try again in a moment."
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Sending…" : denied ? "Ask again" : "Ask for access"}
+          </Primary>
+        )}
         <Secondary onClick={() => void signOut()}>Sign out</Secondary>
       </div>
     </Centered>

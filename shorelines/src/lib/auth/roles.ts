@@ -32,7 +32,7 @@ const RANK: Record<StaffRole, number> = {
 
 /**
  * Capabilities, each pinned to the lowest rank that holds it. Components ask
- * `can(role, "grantSpeakeasy")` rather than comparing roles themselves, so
+ * `can(role, "managePrivateEvents")` rather than comparing roles themselves, so
  * moving a capability between roles is a one-line edit here.
  */
 const CAPABILITIES = {
@@ -49,8 +49,12 @@ const CAPABILITIES = {
    * the couple, not a staff feed.
    */
   viewMemories: RANK.couple,
-  /** The speakeasy is the couple's invitation to extend, not logistics. */
-  grantSpeakeasy: RANK.couple,
+  /**
+   * Creating a private event and naming who may see it. The couple's invitation
+   * to extend, not logistics — a coordinator arranging cars has no business
+   * knowing a gathering exists, let alone adding themselves to it.
+   */
+  managePrivateEvents: RANK.couple,
   flagResponse: RANK.couple,
   editSchedule: RANK.couple,
   /**

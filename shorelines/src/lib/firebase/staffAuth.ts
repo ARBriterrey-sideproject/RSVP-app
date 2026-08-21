@@ -17,6 +17,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 import { isStaffRole, type StaffRole } from "@/lib/auth/roles";
 import { getFirebase } from "./client";
+import type { StaffAccessStatus } from "./staffRoster";
 
 /**
  * Sign-in for the couple and their coordinators. Email + password because the
@@ -24,9 +25,9 @@ import { getFirebase } from "./client";
  * practice, and — as of the phone branch below — the guests' own OTP flow
  * reused as a third option for whoever would rather not keep a password.
  * Reusing it doesn't merge the two identity spaces: staff who sign in this
- * way still only get a role because `syncRole` matches their phone against
- * `STAFF_PHONE_ROSTER` server-side (see functions/src/index.ts), the same way
- * an email only grants one after matching `STAFF_ROSTER`.
+ * way still only get a role because `syncRole` matched them server-side (see
+ * functions/src/index.ts) — against `STAFF_PHONE_ROSTER` / `STAFF_ROSTER`, or
+ * against a request an admin approved in `staffAccess`.
  */
 
 /**
@@ -81,9 +82,10 @@ export async function signInWithGoogle(staySignedIn: boolean): Promise<User> {
 
 /**
  * First-time password setup. Self-service on purpose: creating an account grants
- * nothing at all — the role comes from the server-side roster, and only after
- * the address is verified. So an uninvited signup is an inert account, not a
- * foothold.
+ * nothing at all. A new account gets a role only after it verifies its address
+ * *and* an admin approves it (`requestStaffAccess` → `decideStaffAccess`), or
+ * it is on the deploy-time roster. So an uninvited signup is an inert account
+ * waiting on someone else's decision, not a foothold.
  */
 export async function registerWithPassword(
   email: string,
@@ -132,6 +134,13 @@ export interface SyncedRole {
   role: StaffRole | null;
   /** Whether this account can view photos — by rank (couple+) or an individual grant. */
   photoAccess: boolean;
+  /**
+   * Where this account stands in the approval queue, or null if it has never
+   * asked. The client can't read `staffAccess` — the rules deny it — so this
+   * is the only way the gate can tell "waiting on an admin" apart from "no
+   * role and hasn't asked", which are the same empty claim otherwise.
+   */
+  access: StaffAccessStatus | null;
 }
 
 export async function syncRole(user: User): Promise<SyncedRole> {
@@ -142,7 +151,12 @@ export async function syncRole(user: User): Promise<SyncedRole> {
 
   const call = httpsCallable<
     undefined,
-    { role: string | null; changed: boolean; photoAccess: boolean }
+    {
+      role: string | null;
+      changed: boolean;
+      photoAccess: boolean;
+      access: StaffAccessStatus | null;
+    }
   >(functions, "syncRole");
   const { data } = await call();
 
@@ -151,6 +165,7 @@ export async function syncRole(user: User): Promise<SyncedRole> {
   return {
     role: isStaffRole(data.role) ? data.role : null,
     photoAccess: data.photoAccess,
+    access: data.access ?? null,
   };
 }
 

@@ -27,8 +27,7 @@ import {
 import { PanelNote } from "./panelKit";
 
 function eventName(eventId: EventId, config: WeddingConfig): string {
-  const all = [...config.events, ...config.invitationOnlyEvents];
-  return all.find((event) => event.id === eventId)?.name ?? eventId;
+  return config.events.find((event) => event.id === eventId)?.name ?? eventId;
 }
 
 function EventAlbum({
@@ -197,7 +196,6 @@ export function PhotoAlbumsPanel({
     });
   }
 
-  const allEvents = [...config.events, ...config.invitationOnlyEvents];
 
   return (
     <div className="mt-3">
@@ -215,7 +213,7 @@ export function PhotoAlbumsPanel({
         </p>
       ) : (
         <div className="mt-4 flex flex-col gap-2">
-          {allEvents.map((event) => (
+          {config.events.map((event) => (
             <EventAlbum
               key={event.id}
               eventId={event.id}

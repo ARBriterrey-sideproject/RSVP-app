@@ -8,9 +8,10 @@
  * (`scheduleTimeline`) so a lunch inside the Haldi window sits where it
  * actually falls rather than after every event card.
  *
- * Client, not server, for the same reason `RsvpFlow` is: the speakeasy can
- * only be revealed once a guest's own Firestore document has been read back,
- * and that read has to happen after the tier link resolves, not off it.
+ * Client, not server, for the same reason `RsvpFlow` is: the stored tier and
+ * any private events this guest has been named for can only be resolved once
+ * their own Firestore document has been read back, and that read has to happen
+ * after the tier link resolves, not off it.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,8 +23,9 @@ import {
   ACCENT_FILL,
   ACCENT_TINT,
   dayKey,
-  eventsForGuest,
+  eventsForTier,
   isTier,
+  mapsUrl,
   mealsForEvents,
   scheduleTimeline,
   type Tier,
@@ -31,6 +33,8 @@ import {
   type WeddingConfig,
   type WeddingEvent,
 } from "@/content/wedding";
+import type { PrivateEvent } from "@/content/schema";
+import { myPrivateEvents } from "@/lib/firebase/privateEvents";
 import { eventCopy, scheduleCopy, type Lookup } from "@/i18n/weddingCopy";
 import {
   BOTTOM_TAB_BAR_HEIGHT,
@@ -183,6 +187,92 @@ function MealRow({ entry, t }: { entry: Extract<TimelineEntry, { kind: "meal" }>
   );
 }
 
+/**
+ * "Just for you" — the private events this guest has been named for.
+ *
+ * A separate section below the timeline rather than rows interleaved into it,
+ * because a private event is a reveal and not part of the schedule everyone
+ * else is reading: interleaving would put an unexplained extra card between two
+ * days that a guest comparing notes with a cousin would immediately notice.
+ * There is nothing to accept here — the couple has already decided.
+ */
+function PrivateEventsSection({
+  events,
+  locale,
+  timeZone,
+  title,
+  intro,
+  directions,
+}: {
+  events: PrivateEvent[];
+  locale: string;
+  timeZone: string;
+  title: string;
+  intro: string;
+  directions: string;
+}) {
+  return (
+    <section className="mt-8 scroll-mt-6">
+      <h2 className="font-serif text-[19px] font-medium text-deeptide">{title}</h2>
+      <SingleWave className="mt-2 mb-1.5 h-2 w-14 text-driftwood-faint opacity-70" />
+      <p className="mb-4 font-sans text-[12.5px] leading-snug text-driftwood-soft">
+        {intro}
+      </p>
+
+      <div className="flex flex-col gap-3">
+        {events.map((event) => {
+          const when = new Intl.DateTimeFormat(locale, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            hour: "numeric",
+            minute: "2-digit",
+            timeZone,
+          }).format(new Date(event.startsAt));
+
+          return (
+            <div
+              key={event.id}
+              className="relative overflow-hidden rounded-card bg-card px-4 py-4 ring-1 ring-deeptide/15"
+            >
+              <div className="absolute -right-4 -top-4 size-20 rounded-full bg-deeptide opacity-[0.12]" />
+              <p className="relative font-display text-[27px] leading-none text-driftwood">
+                {event.name}
+              </p>
+              <p className="relative mt-1.5 font-sans text-[12.5px] text-driftwood-soft">
+                {when}
+                {event.venue ? ` · ${event.venue}` : ""}
+              </p>
+              {event.dressCode && (
+                <div className="relative mt-2.5">
+                  <span className="rounded-pill bg-deeptide/10 px-2.5 py-1 font-sans text-[10.5px] font-medium text-driftwood">
+                    {event.dressCode}
+                  </span>
+                </div>
+              )}
+              {event.note && (
+                <p className="relative mt-2.5 font-sans text-[13px] leading-[1.5] text-driftwood-soft">
+                  {event.note}
+                </p>
+              )}
+              {event.mapsQuery && (
+                <a
+                  href={mapsUrl(event)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="relative mt-3 inline-block font-sans text-[12.5px] font-medium text-deeptide underline underline-offset-2"
+                >
+                  {directions}
+                </a>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function DaySection({
   entries,
   locale,
@@ -287,13 +377,19 @@ export function ScheduleScreen({
   const locale = useLocale();
   const timeZone = config.dates.timeZone;
 
-  // Same pattern as RsvpFlow: the stored tier and the speakeasy flag can only
-  // come from the guest's own Firestore document, never the link they arrived
-  // on. Until that read resolves, the schedule shows exactly what the tier
-  // link is entitled to and nothing more.
+  // Same pattern as RsvpFlow: the stored tier can only come from the guest's
+  // own Firestore document, never the link they arrived on. Until that read
+  // resolves, the schedule shows exactly what the tier link is entitled to and
+  // nothing more.
   const [storedTier, setStoredTier] = useState<Tier | null>(null);
-  const [speakeasyInvited, setSpeakeasyInvited] = useState(false);
   const effectiveTier = storedTier ?? tier;
+
+  // Private events are resolved entirely server-side: the callable reads this
+  // guest's own invite list and returns only what's on it. A guest named for
+  // nothing and a guest who hasn't replied get the same empty answer, so a
+  // failed call is indistinguishable from not being invited — which is the
+  // right failure mode for something whose whole point is not being announced.
+  const [privateEvents, setPrivateEvents] = useState<PrivateEvent[]>([]);
 
   useEffect(() => {
     const { auth, db } = getFirebase();
@@ -303,13 +399,17 @@ export function ScheduleScreen({
       if (!snap.exists()) return;
       const stored = snap.data();
       if (isTier(stored.tier)) setStoredTier(stored.tier);
-      setSpeakeasyInvited(stored.speakeasyInvited === true);
+      try {
+        setPrivateEvents(await myPrivateEvents());
+      } catch {
+        setPrivateEvents([]);
+      }
     });
   }, []);
 
   const events = useMemo(
-    () => eventsForGuest(effectiveTier, { speakeasyInvited, config }),
-    [effectiveTier, speakeasyInvited, config]
+    () => eventsForTier(effectiveTier, config),
+    [effectiveTier, config]
   );
   const meals = useMemo(() => mealsForEvents(events, config), [events, config]);
   const timeline = useMemo(
@@ -428,6 +528,17 @@ export function ScheduleScreen({
             />
           </div>
         ))}
+
+        {privateEvents.length > 0 && (
+          <PrivateEventsSection
+            events={privateEvents}
+            locale={locale}
+            timeZone={timeZone}
+            title={t("privateTitle")}
+            intro={t("privateIntro")}
+            directions={t("privateDirections")}
+          />
+        )}
       </div>
 
       <BottomTabBar active="schedule" tier={effectiveTier} live={live} />

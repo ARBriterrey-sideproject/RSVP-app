@@ -16,6 +16,19 @@
 
 import type { WeddingConfig } from "./schema";
 
+/**
+ * The two properties, written the way Google Maps itself resolves them.
+ *
+ * The couple sent `maps.app.goo.gl` short links; these are what those expand
+ * to. Naming them once here is the one concession to "no derived values" in
+ * this file — four events share the resort, and four copies of a 60-character
+ * address is four chances to fix three of them.
+ */
+const GOPALPUR_RESORT =
+  "Gopalpur Resort, near Gopalpur Light House, Gopalpur, Brahmapur, Odisha 761002, India";
+const OTDC_PANTHANIVAS =
+  "OTDC Panthanivas, Gopalpur, Boxipalli, Odisha 761002, India";
+
 export const weddingConfig: WeddingConfig = {
   configVersion: 1,
   slug: "shubham-amruta",
@@ -31,9 +44,8 @@ export const weddingConfig: WeddingConfig = {
 
   /**
    * CONFIRMED by the couple: 28–30 December 2026, three days.
-   *
-   * The RSVP deadline is still a PLACEHOLDER — 1 December gives four weeks to
-   * chase stragglers and settle catering numbers, but nobody has agreed it.
+   * rsvpDeadline is also CONFIRMED — 1 December gives four weeks to chase
+   * stragglers and settle catering numbers.
    */
   dates: {
     firstDay: "2026-12-28",
@@ -81,9 +93,22 @@ export const weddingConfig: WeddingConfig = {
   /**
    * The couple's own schedule, 28–30 December 2026. Times are CONFIRMED.
    *
-   * Venue names and dress codes are still PLACEHOLDERS — the couple gave times
-   * and ceremonies, not rooms or what to wear. `mapsQuery` points at the town
-   * until there's a named property to point at.
+   * Venues are now real properties, given by the couple: Gopalpur Resort for
+   * Mehendi, Haldi, Sangeet and the Reception, and OTDC Panthanivas for the
+   * wedding on the 30th. **The wedding venue is not yet finalised** — the couple
+   * said they'd confirm, so treat OTDC Panthanivas as their current intention,
+   * not a settled fact, and expect to change that one row.
+   *
+   * `mapsQuery` is the place string Google's own short link resolves to, not
+   * the short link itself: `mapsUrl` builds a `maps.google.com/?q=` search, and
+   * a resolved address can't quietly stop working the way a shortener can.
+   *
+   * `venueShort` is the property name too, so it repeats across four events on
+   * the landing — the thing its own doc comment warns about. That's the honest
+   * reading until the resort names the actual lawn/hall for each ceremony; when
+   * it does, the room name belongs in `venueShort` and the property in `venue`.
+   *
+   * Dress codes are still PLACEHOLDERS (acceptable as written, per the couple).
    *
    * Tier visibility is the real logic here:
    *   full            → all five ceremonies
@@ -98,9 +123,9 @@ export const weddingConfig: WeddingConfig = {
       name: "Mehendi",
       startsAt: "2026-12-28T19:00:00+05:30",
       endsAt: "2026-12-28T21:00:00+05:30",
-      venue: "Courtyard",
-      venueShort: "Courtyard",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
+      venue: "Gopalpur Resort",
+      venueShort: "Gopalpur Resort",
+      mapsQuery: GOPALPUR_RESORT,
       dressCode: "Linen & green",
       daypart: "Evening",
       tiers: ["full"],
@@ -111,9 +136,9 @@ export const weddingConfig: WeddingConfig = {
       name: "Haldi",
       startsAt: "2026-12-29T10:00:00+05:30",
       endsAt: "2026-12-29T14:00:00+05:30",
-      venue: "Garden lawn",
-      venueShort: "Garden lawn",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
+      venue: "Gopalpur Resort",
+      venueShort: "Gopalpur Resort",
+      mapsQuery: GOPALPUR_RESORT,
       dressCode: "Wear yellow · barefoot",
       daypart: "Morning",
       tiers: ["full"],
@@ -124,9 +149,9 @@ export const weddingConfig: WeddingConfig = {
       name: "Sangeet",
       startsAt: "2026-12-29T18:00:00+05:30",
       endsAt: "2026-12-29T21:00:00+05:30",
-      venue: "Banquet lawn",
-      venueShort: "Banquet lawn",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
+      venue: "Gopalpur Resort",
+      venueShort: "Gopalpur Resort",
+      mapsQuery: GOPALPUR_RESORT,
       dressCode: "Dance-ready",
       daypart: "Evening",
       tiers: ["full"],
@@ -137,9 +162,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Wedding",
       startsAt: "2026-12-30T10:00:00+05:30",
       endsAt: "2026-12-30T14:00:00+05:30",
-      venue: "Shoreline mandap",
-      venueShort: "Shoreline mandap",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
+      // NOT FINALISED — the couple's current choice, to be confirmed.
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
       dressCode: "Formal ivory",
       daypart: "Morning",
       tiers: ["full", "wedding_only"],
@@ -151,41 +177,13 @@ export const weddingConfig: WeddingConfig = {
       name: "Reception",
       startsAt: "2026-12-30T18:30:00+05:30",
       endsAt: "2026-12-30T21:00:00+05:30",
-      venue: "Terrace",
-      venueShort: "Terrace",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
+      venue: "Gopalpur Resort",
+      venueShort: "Gopalpur Resort",
+      mapsQuery: GOPALPUR_RESORT,
       dressCode: "Formal",
       daypart: "Evening",
       tiers: ["full", "reception_only"],
       accent: "clay",
-    },
-  ],
-
-  /**
-   * The couple's private gathering between the public events.
-   *
-   * Carries no tier, and lives in its own array so that no tier filter can
-   * reach it. It is revealed only to guests the couple has individually flagged
-   * in the dashboard. Time and venue are PLACEHOLDERS.
-   *
-   * SECURITY: the reveal is enforced in the callable and in Firestore rules,
-   * not here. Treat this as copy, not as an access decision — never render it
-   * without first checking the guest's own `speakeasyInvited` flag.
-   */
-  invitationOnlyEvents: [
-    {
-      id: "speakeasy",
-      name: "The Speakeasy",
-      startsAt: "2026-12-29T22:00:00+05:30",
-      endsAt: "2026-12-30T01:00:00+05:30",
-      venue: "Told to you on the night",
-      venueShort: "Told to you on the night",
-      mapsQuery: "Gopalpur-on-Sea, Odisha",
-      dressCode: "Whatever you danced in",
-      daypart: "Late",
-      tiers: [],
-      accent: "deeptide",
-      invitationOnly: true,
     },
   ],
 
@@ -210,9 +208,9 @@ export const weddingConfig: WeddingConfig = {
   ],
 
   /**
-   * Soft cap on party size per submission. The plan flags this as an open item;
-   * 15 is a starting guess, not a decision. Enforced server-side in the callable
-   * Function — this value is only for inline validation feedback.
+   * Soft cap on party size per submission. CONFIRMED by the couple at 15.
+   * Enforced server-side in the callable Function — this value is only for
+   * inline validation feedback.
    */
   party: { softCap: 15 },
 };

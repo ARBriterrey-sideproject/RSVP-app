@@ -53,7 +53,8 @@ service cloud.firestore {
       // No client writes at all — not even from an admin. Creation and edits
       // go through the submitRsvp callable so that party-size caps and tier
       // immutability are enforced somewhere the client cannot reach, and the
-      // speakeasy flag goes through setSpeakeasyInvite for the same reason.
+      // private-event invite list goes through setPrivateEventInvite for the
+      // same reason.
       allow create, update, delete: if false;
     }
 
@@ -62,9 +63,10 @@ service cloud.firestore {
     // that the callable mints. The code IS the capability, so `get` is open —
     // a scanner has no account and cannot be asked to sign in.
     //
-    // Two things keep that safe, and both are enforced in submitRsvp, not here:
-    // the mirror carries names only (no phone, travel or notes), and
-    // invitation-only events are stripped out of it.
+    // What keeps that safe is enforced in submitRsvp, not here: the mirror
+    // carries names only — no phone, travel plans or notes. A QR gets
+    // forwarded, so anything added to that document is world-readable to
+    // whoever ends up holding it.
     match /invites/{shareCode} {
       allow get: if true;
       // Never listable: enumerating this collection would hand over every
@@ -97,6 +99,28 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow write: if false;
+    }
+
+    // ---- Private events -----------------------------------------------------
+    // A gathering the couple adds after the app is built, shown only to the
+    // guests they name one by one. Staff read it because the dashboard panel
+    // that manages it has to list what exists.
+    //
+    // Guests deliberately cannot read this collection at all — not even a doc
+    // they've been invited to. The alternative would be a cross-document `get()`
+    // into the caller's own rsvp on every read, and a rule that says "you may
+    // read this if another document says so" is one edit away from saying the
+    // opposite. The guest path is the getMyPrivateEvents callable, which reads
+    // the invite list off `rsvps/{their own uid}` with the Admin SDK. So the doc
+    // id leaks nothing: holding one buys nothing without a matching entry on
+    // your own reply.
+    //
+    // Writes are closed to everyone, admin included — savePrivateEvent and
+    // deletePrivateEvent are the only paths, so that deleting an event also
+    // clears the id off every guest who held it.
+    match /privateEvents/{eventId} {
+      allow get, list: if isStaff();
+      allow create, update, delete: if false;
     }
 
     // ---- Polls (v2) --------------------------------------------------------
@@ -179,6 +203,16 @@ service cloud.firestore {
     // means granted, a missing doc means not granted. Admin SDK only, same
     // as config/live — nobody, including admin, writes this from the client.
     match /staffPhotoAccess/{identity} {
+      allow read, write: if false;
+    }
+
+    // Staff access requests, keyed by the same roster identity. Sealed for the
+    // same reason config/live is: `requestStaffAccess` and `decideStaffAccess`
+    // are the only writers, and a client that could write here could approve
+    // itself. Reads are closed too — even for admin, who gets this collection
+    // through `getStaffRoster` instead. A pending requester learns their own
+    // status from what `syncRole` returns, not by reading the row.
+    match /staffAccess/{identity} {
       allow read, write: if false;
     }
 
