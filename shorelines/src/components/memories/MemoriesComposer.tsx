@@ -98,7 +98,7 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
       </div>
 
       <div
-        className="mx-auto w-full max-w-md flex-none bg-sand/[0.96] px-4 pt-2 backdrop-blur-md md:max-w-shell-wide"
+        className="flex-none bg-sand/[0.96] px-4 pt-2 backdrop-blur-md"
         style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
       >
         {error ? <p className="mb-1.5 px-1 text-xs text-coral-ink">{error}</p> : null}

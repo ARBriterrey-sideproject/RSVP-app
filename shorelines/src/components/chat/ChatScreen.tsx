@@ -109,7 +109,7 @@ export function ChatScreen({ tier }: { tier: Tier }) {
       )}
 
       <div
-        className="fixed inset-x-0 z-30 mx-auto w-full max-w-md bg-sand/[0.96] px-4 pt-2 backdrop-blur-md md:max-w-shell-wide"
+        className="fixed inset-x-0 z-30 mx-auto w-full max-w-content bg-sand/[0.96] px-4 pt-2 backdrop-blur-md"
         style={{
           bottom: BOTTOM_TAB_BAR_HEIGHT,
           paddingBottom: "max(8px, env(safe-area-inset-bottom))",

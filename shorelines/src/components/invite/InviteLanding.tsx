@@ -58,11 +58,11 @@ export async function InviteLanding({
   const tag = await localeTag();
 
   return (
-    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand md:max-w-shell-wide">
+    <main className="relative w-full overflow-x-hidden bg-sand">
       <Curtain />
       <Hero />
 
-      <section className="scroll-reveal px-[34px] pt-[34px] pb-2.5 text-center">
+      <section className="scroll-reveal mx-auto w-full max-w-content px-[34px] pt-[34px] pb-2.5 text-center">
         <p className="text-pretty font-serif text-2xl font-light leading-[1.35] text-driftwood">
           {t("lede", { days: dayCount(events) })}
         </p>
@@ -75,7 +75,7 @@ export async function InviteLanding({
         <DoubleWave />
       </div>
 
-      <section className="px-6 pt-1.5">
+      <section className="mx-auto w-full max-w-content px-6 pt-1.5">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
           {t("daysHeading", { days: events.length })}
         </h2>
@@ -92,7 +92,7 @@ export async function InviteLanding({
       <TravelAndStay />
       <PhotoBand />
 
-      <section className="scroll-lift px-[30px] pt-[34px] pb-[46px] text-center">
+      <section className="scroll-lift mx-auto w-full max-w-content px-[30px] pt-[34px] pb-[46px] text-center">
         <p className="font-serif text-[21px] font-light italic leading-[1.4] text-driftwood">
           {t("willYouBeWithUs")}
         </p>
@@ -182,7 +182,7 @@ async function Curtain() {
   return (
     <div
       aria-hidden
-      className="animate-curtain pointer-events-none fixed inset-0 z-20 mx-auto flex max-w-md items-center justify-center overflow-hidden bg-sunbleach md:max-w-shell-wide"
+      className="animate-curtain pointer-events-none fixed inset-0 z-20 flex items-center justify-center overflow-hidden bg-sunbleach"
     >
       <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_50%_40%,rgba(255,255,255,0.7),transparent_70%)]" />
 
@@ -346,7 +346,7 @@ async function TravelAndStay() {
   const stay = logisticsCopy(tWedding, "stay", LOGISTICS.stay);
 
   return (
-    <section id="travel" className="scroll-reveal scroll-mt-6 px-6 pt-9">
+    <section id="travel" className="scroll-reveal scroll-mt-6 mx-auto w-full max-w-content px-6 pt-9">
       <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
         {t("travelHeading")}
       </h2>

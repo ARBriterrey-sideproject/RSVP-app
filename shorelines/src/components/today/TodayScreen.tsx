@@ -535,7 +535,10 @@ export function TodayScreen({
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
       >
-        <header className="relative overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] px-6 pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
+        {/* Breaks out of AppShell's max-w-content wrapper to stay full-bleed:
+            `left-1/2 -translate-x-1/2 w-screen` recenters on the viewport
+            regardless of the capped parent's own width/position. */}
+        <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] px-6 pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
           <div className="animate-tide pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_25%_25%,rgba(226,138,118,0.45),transparent_70%),radial-gradient(45%_45%_at_85%_60%,rgba(255,236,200,0.55),transparent_70%)]" />
           <Palm
             className="animate-sway-b pointer-events-none absolute -right-8 -top-5 w-[170px] opacity-[0.28]"

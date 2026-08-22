@@ -69,13 +69,9 @@
   --radius-card: 16px;
   --radius-pill: 999px;
 
-  /* Layout — the guest app-shell's width cap on wide viewports (graceful
-     widen, not a desktop redesign): see AppShell.tsx. Fluid rather than a
-     fixed px value so the side margins stay proportional instead of turning
-     into a fixed ~600px band on large/ultrawide monitors: holds at 42rem
-     through the md breakpoint, then grows with the viewport up to a 75rem
-     readability ceiling. */
-  --container-shell-wide: clamp(42rem, 70vw, 75rem);
+  /* The readable-content cap: prose, forms, list rows. Applied to an inner
+     wrapper, not the outer shell — the shell itself is full-bleed. */
+  --container-content: 42rem;
 
   /* Dashboard is staff-facing, data-dense (tables, stat grids) — a slightly
      wider ceiling than the guest shell earns its keep here. */

@@ -62,7 +62,7 @@ export function SharedInvite({
   if (invite === "loading") {
     return (
       <Frame>
-        <p className="py-20 text-center font-sans text-sm text-driftwood-soft">
+        <p className="mx-auto w-full max-w-content py-20 text-center font-sans text-sm text-driftwood-soft">
           {t("loading")}
         </p>
       </Frame>
@@ -72,7 +72,7 @@ export function SharedInvite({
   if (invite === "missing") {
     return (
       <Frame>
-        <div className="px-6 py-20 text-center">
+        <div className="mx-auto w-full max-w-content px-6 py-20 text-center">
           <h1 className="font-display text-[38px] leading-none text-deeptide">
             {t("missingTitle")}
           </h1>
@@ -125,7 +125,7 @@ export function SharedInvite({
         <ScallopEdge className="text-sand" />
       </header>
 
-      <section className="px-6 pt-7">
+      <section className="mx-auto w-full max-w-content px-6 pt-7">
         <div className="rounded-card bg-card p-4">
           <p className="font-sans text-[13.5px] leading-[1.6] text-driftwood">
             {host
@@ -158,7 +158,7 @@ export function SharedInvite({
         </div>
       </section>
 
-      <section className="px-6 pt-7">
+      <section className="mx-auto w-full max-w-content px-6 pt-7">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
           {attending.length === events.length ? t("theDays") : t("yourDays")}
         </h2>
@@ -176,7 +176,7 @@ export function SharedInvite({
       </section>
 
       {meals.length > 0 && (
-        <section className="px-6 pt-7">
+        <section className="mx-auto w-full max-w-content px-6 pt-7">
           <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
             {t("meals")}
           </h2>
@@ -190,7 +190,7 @@ export function SharedInvite({
         </section>
       )}
 
-      <section className="px-6 pt-7 pb-12">
+      <section className="mx-auto w-full max-w-content px-6 pt-7 pb-12">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
           {t("gettingThere")}
         </h2>
@@ -246,7 +246,7 @@ export function SharedInvite({
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
-    <main className="relative mx-auto w-full max-w-md overflow-x-hidden bg-sand md:max-w-shell-wide">
+    <main className="relative w-full overflow-x-hidden bg-sand">
       {children}
     </main>
   );
