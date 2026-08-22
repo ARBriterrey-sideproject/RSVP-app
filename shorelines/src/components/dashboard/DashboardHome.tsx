@@ -147,7 +147,7 @@ export function DashboardHome({ config, overlay }: PanelContext) {
       : visible;
 
   return (
-    <main className="mx-auto w-full max-w-[560px] px-6 py-10 md:max-w-3xl">
+    <main className="mx-auto w-full max-w-[560px] px-6 py-10 md:max-w-dashboard-wide">
       <header className="flex items-start justify-between gap-4">
         <div>
           <p className="font-sans text-[11px] uppercase tracking-[0.22em] text-driftwood-faint">
