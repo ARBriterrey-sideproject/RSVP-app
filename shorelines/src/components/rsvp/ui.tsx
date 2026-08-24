@@ -208,13 +208,32 @@ export function WaveRule() {
   );
 }
 
+const SCALLOP_TILE_PATH: Record<"bottom" | "top", string> = {
+  bottom: "M0 0 A5 5 0 0 0 10 0 L10 8 L0 8 Z",
+  top: "M0 8 A5 5 0 0 1 10 8 L10 0 L0 0 Z",
+};
+
+function scallopMaskImage(edge: "bottom" | "top") {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 8"><path d="${SCALLOP_TILE_PATH[edge]}" fill="black"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+const SCALLOP_MASK_IMAGE: Record<"bottom" | "top", string> = {
+  bottom: scallopMaskImage("bottom"),
+  top: scallopMaskImage("top"),
+};
+
 /**
- * The scalloped edge where a coloured band meets the sand. Drawn as a run of
- * half-circles so it tiles cleanly at any width.
+ * The scalloped edge where a coloured band meets the sand. A single scallop
+ * tile is repeated via a CSS mask (rather than stretched across a fixed
+ * viewBox) so the number of frills scales with the rendered width — each
+ * stays a true circle at any viewport, continuously through a live resize,
+ * with no JS measurement.
  *
- * `edge` is which side of the band it sits on. The two differ by the arc sweep
- * flag — bottom bites upward into the band, top bites downward — so a band with
- * both gets scallops that curve the same way rather than mirroring.
+ * `edge` is which side of the band it sits on. The two tiles differ by the
+ * arc sweep flag — bottom bites upward into the band, top bites downward —
+ * so a band with both gets scallops that curve the same way rather than
+ * mirroring.
  */
 export function ScallopEdge({
   className = "",
@@ -223,30 +242,25 @@ export function ScallopEdge({
   className?: string;
   edge?: "bottom" | "top";
 }) {
-  const sweep = edge === "bottom" ? 0 : 1;
-  const y = edge === "bottom" ? 0 : 8;
-  const arcs = Array.from(
-    { length: 12 },
-    (_, i) => `A5 5 0 0 ${sweep} ${(i + 1) * 10} ${y}`
-  ).join(" ");
+  const maskImage = SCALLOP_MASK_IMAGE[edge];
 
   return (
-    <svg
-      viewBox="0 0 120 8"
-      preserveAspectRatio="none"
+    <div
       aria-hidden
       className={`absolute inset-x-0 h-4 w-full ${
         edge === "bottom" ? "-bottom-px" : "-top-px"
       } ${className}`}
-    >
-      <path
-        d={
-          edge === "bottom"
-            ? `M0 0 ${arcs} L120 8 L0 8 Z`
-            : `M0 8 ${arcs} L120 0 L0 0 Z`
-        }
-        fill="currentColor"
-      />
-    </svg>
+      style={{
+        backgroundColor: "currentColor",
+        WebkitMaskImage: maskImage,
+        maskImage,
+        WebkitMaskRepeat: "repeat-x",
+        maskRepeat: "repeat-x",
+        WebkitMaskSize: "20px 16px",
+        maskSize: "20px 16px",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
   );
 }
