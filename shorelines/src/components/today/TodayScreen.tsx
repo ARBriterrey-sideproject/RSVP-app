@@ -35,6 +35,7 @@ import { submitSongRequest } from "@/lib/firebase/songRequests";
 import {
   ACCENT_FILL,
   ACCENT_TINT,
+  LOGISTICS,
   dayKey,
   eventsForTier,
   isTier,
@@ -601,7 +602,7 @@ export function TodayScreen({
                   href={`/schedule?tier=${tierCode(effectiveTier)}`}
                   className="flex-1 rounded-pill border border-deeptide/40 px-3 py-2.5 text-center font-sans text-[12.5px] font-medium text-deeptide"
                 >
-                  {t("shuttleTimes")}
+                  {LOGISTICS.shuttle.available ? t("shuttleTimes") : t("viewSchedule")}
                 </Link>
               </div>
             </div>

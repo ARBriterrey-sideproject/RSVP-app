@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import {
   COUPLE,
   DESTINATION,
+  LOGISTICS,
   WEDDING_DATES,
   rsvpDeadlineLabel,
 } from "@/content/wedding";
@@ -104,7 +105,7 @@ export function StepDone({
           : // The mockup opens with "A confirmation is on its way" — we never
             // ask for an email, so nothing is on its way. The rest is the
             // design's.
-            t("bodyAccepted")}
+            t("bodyAccepted", { hasShuttle: String(LOGISTICS.shuttle.available) })}
       </p>
 
       <div className="mt-5 rounded-card bg-card p-4 text-left">

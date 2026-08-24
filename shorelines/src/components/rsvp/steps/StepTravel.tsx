@@ -113,8 +113,10 @@ export function StepTravel({
       )}
 
       {/* Same rule as the service number: there is nothing to send a car for
-          until we know they're arriving somewhere a car can meet them. */}
-      {travel.mode && travel.mode !== "self" && (
+          until we know they're arriving somewhere a car can meet them. Also
+          gated on LOGISTICS.shuttle.available — nothing offers a pickup that
+          isn't arranged. */}
+      {LOGISTICS.shuttle.available && travel.mode && travel.mode !== "self" && (
         <Card className="mt-2.5 flex items-center gap-3.5">
           <div className="flex-1">
             <div className="font-sans text-[15px] font-medium leading-tight text-driftwood">

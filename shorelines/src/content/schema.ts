@@ -132,8 +132,19 @@ export interface AirportPoint extends TravelPoint {
 export interface LogisticsConfig {
   airport: AirportPoint;
   station: TravelPoint;
-  /** Prose the couple writes; no facts embedded. Translatable. */
-  shuttle: { title: string; description: string };
+  /**
+   * Prose the couple writes; no facts embedded. Translatable.
+   *
+   * `available` is the one field here that is a fact, not prose — it decides
+   * whether the shuttle exists at all, so it stays a plain compiled boolean
+   * rather than a message-catalogue key. Every guest-facing mention of a
+   * pickup vehicle (the landing's Travel & Stay row, the RSVP travel step's
+   * toggle, the confirmation summary, the Today screen's "Shuttle times"
+   * link, and the two prose mentions in `invite.blurb` / `done.bodyAccepted`)
+   * reads this flag, so flipping it off removes the promise everywhere, in
+   * all four languages, in one edit.
+   */
+  shuttle: { available: boolean; title: string; description: string };
   stay: { description: string };
 }
 

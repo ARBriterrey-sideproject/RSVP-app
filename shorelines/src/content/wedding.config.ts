@@ -81,6 +81,9 @@ export const weddingConfig: WeddingConfig = {
       distanceKm: 16,
     },
     shuttle: {
+      // Still true to preserve today's live guest-facing behaviour — flip
+      // to false once the couple decides not to arrange it (see schema.ts).
+      available: true,
       title: "Pickup from airport or station",
       description: "Tell us your arrival and we'll send a car",
     },

@@ -67,7 +67,10 @@ export async function InviteLanding({
           {t("lede", { days: dayCount(events) })}
         </p>
         <p className="mt-3.5 text-pretty font-sans text-[14.5px] leading-[1.75] text-driftwood-soft">
-          {t("blurb", { count: events.length })}
+          {t("blurb", {
+            count: events.length,
+            hasShuttle: String(LOGISTICS.shuttle.available),
+          })}
         </p>
       </section>
 
@@ -374,7 +377,9 @@ async function TravelAndStay() {
             LOGISTICS.airport.note
           )}
         />
-        <LogisticsRow title={shuttle.title} description={shuttle.description} />
+        {LOGISTICS.shuttle.available && (
+          <LogisticsRow title={shuttle.title} description={shuttle.description} />
+        )}
         <LogisticsRow title={stay.title} description={stay.description} />
       </div>
 
