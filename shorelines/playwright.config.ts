@@ -18,6 +18,14 @@ import { defineConfig, devices } from "@playwright/test";
  * this suite runs against demo-shorelines regardless of whatever project
  * .env.local happens to be pointed at for manual testing.
  */
+/**
+ * Same reasoning as the emulator ports in tests/rules/env.ts: 3000 is the
+ * first port every other dev server on the machine also wants. Export
+ * E2E_PORT to move both the spawned `next dev` and the baseURL together.
+ */
+const PORT = process.env.E2E_PORT ?? "3000";
+const ORIGIN = `http://127.0.0.1:${PORT}`;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -26,7 +34,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: ORIGIN,
     trace: "on-first-retry",
   },
   // Chromium only: the bundled build silently mis-renders Odia dates (see
@@ -49,8 +57,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:3000",
+    command: `npm run dev -- -p ${PORT}`,
+    url: ORIGIN,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {

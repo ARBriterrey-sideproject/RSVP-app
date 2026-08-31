@@ -135,6 +135,28 @@
       "sent": "Sent — thanks!"
     }
   },
+  "upcoming": {
+    "eyebrow": "Your invitation",
+    "eyebrowWithName": "For {name}",
+    "countdown": "{days, plural, =1 {One day to go} other {# days to go}}",
+    "countdownNow": "It begins today",
+    "intro": "Everything you need for {region}, in one place.",
+    "reply": {
+      "title": "Your reply",
+      "done": "You're all set — {party, plural, =1 {one guest} other {# guests}}, {going} of {total} events.",
+      "pending": "We haven't heard from you yet. Replies close on {deadline}.",
+      "cta": "Reply now",
+      "changeCta": "Change my reply"
+    },
+    "attending": {
+      "title": "You're coming to",
+      "eligibleTitle": "Your days with us"
+    },
+    "gettingThere": {
+      "title": "Getting there"
+    },
+    "signOff": "we can't wait to have you there"
+  },
   "landing": {
     "saveTheDate": "Save the date",
     "scroll": "Scroll",

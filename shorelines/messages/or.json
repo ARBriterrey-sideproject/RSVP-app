@@ -192,6 +192,28 @@
       "sent": "ପଠାଗଲା — ଧନ୍ୟବାଦ!"
     }
   },
+  "upcoming": {
+    "eyebrow": "ଆପଣଙ୍କ ନିମନ୍ତ୍ରଣ",
+    "eyebrowWithName": "{name} ଙ୍କ ପାଇଁ",
+    "countdown": "{days, plural, =1 {ଆଉ ଏକ ଦିନ ବାକି} other {ଆଉ # ଦିନ ବାକି}}",
+    "countdownNow": "ଆଜିଠାରୁ ଆରମ୍ଭ",
+    "intro": "{region} ପାଇଁ ଆବଶ୍ୟକ ସବୁକିଛି, ଏକାଠି।",
+    "reply": {
+      "title": "ଆପଣଙ୍କ ଉତ୍ତର",
+      "done": "ସବୁ ପ୍ରସ୍ତୁତ — {party, plural, =1 {ଜଣେ ଅତିଥି} other {# ଜଣ ଅତିଥି}}, {total} ମଧ୍ୟରୁ {going} ଅନୁଷ୍ଠାନ।",
+      "pending": "ଆପଣଙ୍କ ଉତ୍ତର ଏପର୍ଯ୍ୟନ୍ତ ମିଳିନାହିଁ। {deadline} ସୁଦ୍ଧା ଜଣାନ୍ତୁ।",
+      "cta": "ବର୍ତ୍ତମାନ ଉତ୍ତର ଦିଅନ୍ତୁ",
+      "changeCta": "ଉତ୍ତର ବଦଳାନ୍ତୁ"
+    },
+    "attending": {
+      "title": "ଆପଣ ଆସୁଥିବା ଅନୁଷ୍ଠାନ",
+      "eligibleTitle": "ଆମ ସହିତ ଆପଣଙ୍କ ଦିନଗୁଡ଼ିକ"
+    },
+    "gettingThere": {
+      "title": "ପହଞ୍ଚିବାର ବାଟ"
+    },
+    "signOff": "ଆପଣଙ୍କ ଅପେକ୍ଷାରେ"
+  },
   "landing": {
     "saveTheDate": "ତାରିଖ ମନେ ରଖନ୍ତୁ",
     "scroll": "ତଳକୁ ଯାଆନ୍ତୁ",

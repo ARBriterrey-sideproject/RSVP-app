@@ -192,6 +192,28 @@
       "sent": "भेज दिया — धन्यवाद!"
     }
   },
+  "upcoming": {
+    "eyebrow": "आपका निमंत्रण",
+    "eyebrowWithName": "{name} के लिए",
+    "countdown": "{days, plural, =1 {बस एक दिन बाकी} other {बस # दिन बाकी}}",
+    "countdownNow": "आज से शुरुआत",
+    "intro": "{region} के लिए ज़रूरी सब कुछ, एक ही जगह।",
+    "reply": {
+      "title": "आपका उत्तर",
+      "done": "सब तय है — {party, plural, =1 {एक मेहमान} other {# मेहमान}}, {total} में से {going} समारोह।",
+      "pending": "आपका उत्तर अब तक नहीं मिला। {deadline} तक बता दीजिए।",
+      "cta": "अभी उत्तर दें",
+      "changeCta": "उत्तर बदलें"
+    },
+    "attending": {
+      "title": "आप इनमें शामिल हो रहे हैं",
+      "eligibleTitle": "हमारे साथ आपके दिन"
+    },
+    "gettingThere": {
+      "title": "पहुँचने का रास्ता"
+    },
+    "signOff": "आपका इंतज़ार है"
+  },
   "landing": {
     "saveTheDate": "तारीख़ याद रखें",
     "scroll": "नीचे देखें",

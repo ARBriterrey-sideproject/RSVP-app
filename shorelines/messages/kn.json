@@ -192,6 +192,28 @@
       "sent": "ಕಳುಹಿಸಲಾಗಿದೆ — ಧನ್ಯವಾದಗಳು!"
     }
   },
+  "upcoming": {
+    "eyebrow": "ನಿಮ್ಮ ಆಮಂತ್ರಣ",
+    "eyebrowWithName": "{name} ಅವರಿಗಾಗಿ",
+    "countdown": "{days, plural, =1 {ಇನ್ನೂ ಒಂದು ದಿನ} other {ಇನ್ನೂ # ದಿನಗಳು}}",
+    "countdownNow": "ಇಂದಿನಿಂದ ಆರಂಭ",
+    "intro": "{region} ಗೆ ಬೇಕಾದ ಎಲ್ಲವೂ ಒಂದೇ ಕಡೆ.",
+    "reply": {
+      "title": "ನಿಮ್ಮ ಉತ್ತರ",
+      "done": "ಎಲ್ಲವೂ ಸಿದ್ಧ — {party, plural, =1 {ಒಬ್ಬರು ಅತಿಥಿ} other {# ಅತಿಥಿಗಳು}}, {total} ರಲ್ಲಿ {going} ಸಮಾರಂಭಗಳು.",
+      "pending": "ನಿಮ್ಮ ಉತ್ತರ ಇನ್ನೂ ಬಂದಿಲ್ಲ. {deadline} ಒಳಗೆ ತಿಳಿಸಿ.",
+      "cta": "ಈಗಲೇ ಉತ್ತರಿಸಿ",
+      "changeCta": "ಉತ್ತರ ಬದಲಿಸಿ"
+    },
+    "attending": {
+      "title": "ನೀವು ಬರುತ್ತಿರುವ ಸಮಾರಂಭಗಳು",
+      "eligibleTitle": "ನಮ್ಮೊಂದಿಗಿನ ನಿಮ್ಮ ದಿನಗಳು"
+    },
+    "gettingThere": {
+      "title": "ತಲುಪುವ ದಾರಿ"
+    },
+    "signOff": "ನಿಮಗಾಗಿ ಕಾಯುತ್ತಿದ್ದೇವೆ"
+  },
   "landing": {
     "saveTheDate": "ದಿನಾಂಕ ನೆನಪಿಡಿ",
     "scroll": "ಕೆಳಗೆ ಸರಿಸಿ",

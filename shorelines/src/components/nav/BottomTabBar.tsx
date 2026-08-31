@@ -114,7 +114,7 @@ const TABS: {
   href: (tier: Tier) => string;
   eventOnly?: boolean;
 }[] = [
-  { id: "today", Icon: SunIcon, href: (tier) => `/?tier=${tierCode(tier)}` },
+  { id: "today", Icon: SunIcon, href: (tier) => `/today?tier=${tierCode(tier)}` },
   {
     id: "schedule",
     Icon: ScheduleIcon,

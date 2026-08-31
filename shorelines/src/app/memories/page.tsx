@@ -1,18 +1,17 @@
 import { MemoriesComposer } from "@/components/memories/MemoriesComposer";
-import { EventModeLocked } from "@/components/nav/EventModeLocked";
-import { isWeddingLive, resolveTier } from "@/content/wedding";
-import { resolveAsOf } from "@/lib/wedding/asOf";
-import { getLiveWeddingConfig } from "@/lib/wedding/live";
+import { resolveTier } from "@/content/wedding";
 
-/** Event-mode gated — see EventModeLocked. Reached only from links on TodayScreen, so it has no tab bar of its own. */
+/**
+ * Not event-gated, unlike Chat and Photos.
+ *
+ * A private note to the couple doesn't need the wedding to have started — the
+ * rules agree: `memories` create is gated on `isSignedIn()` and an owning uid
+ * with no time condition, so nothing server-side ever enforced the wedding
+ * window here. It's the one live-wedding feature `UpcomingScreen` links to.
+ *
+ * Reached only from links on the Today screens, so it has no tab bar of its own.
+ */
 export default async function MemoriesPage({ searchParams }: PageProps<"/memories">) {
   const params = await searchParams;
-  const tier = resolveTier(params.tier);
-  const config = await getLiveWeddingConfig();
-
-  if (!isWeddingLive(config, resolveAsOf(params.asOf))) {
-    return <EventModeLocked tier={tier} />;
-  }
-
-  return <MemoriesComposer tier={tier} />;
+  return <MemoriesComposer tier={resolveTier(params.tier)} />;
 }

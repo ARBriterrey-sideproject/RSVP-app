@@ -71,7 +71,7 @@ export function MemoriesComposer({ tier }: { tier: Tier }) {
     <AppShell>
       <header className="flex-none px-6 pt-8 pb-3">
         <Link
-          href={`/?tier=${tierCode(tier)}`}
+          href={`/today?tier=${tierCode(tier)}`}
           className="font-sans text-[12.5px] font-medium text-driftwood-faint"
         >
           {t("back")}

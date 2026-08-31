@@ -20,9 +20,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { onSnapshot } from "firebase/firestore";
 import { getFirebase } from "@/lib/firebase/client";
+import { useGuestRsvp } from "@/components/today/useGuestRsvp";
 import {
   pollFromDoc,
   pollsQuery,
@@ -38,7 +38,6 @@ import {
   LOGISTICS,
   dayKey,
   eventsForTier,
-  isTier,
   mapsUrl,
   mealsForEvents,
   scheduleTimeline,
@@ -342,39 +341,9 @@ export function TodayScreen({
 
   // Same pattern as ScheduleScreen and RsvpFlow: the stored tier, guest name
   // and per-event replies can only come from the guest's own Firestore
-  // document, never the link they arrived on.
-  const [storedTier, setStoredTier] = useState<Tier | null>(null);
-  const [guestName, setGuestName] = useState<string | null>(null);
-  const [perEventAttendance, setPerEventAttendance] = useState<Record<
-    string,
-    boolean
-  > | null>(null);
+  // document, never the link they arrived on. Shared with UpcomingScreen.
+  const { storedTier, guestName, perEventAttendance } = useGuestRsvp();
   const effectiveTier = storedTier ?? tier;
-
-  useEffect(() => {
-    const { auth, db } = getFirebase();
-    return onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
-      const snap = await getDoc(doc(db, "rsvps", user.uid));
-      if (!snap.exists()) return;
-      const stored = snap.data();
-      if (isTier(stored.tier)) setStoredTier(stored.tier);
-      const party = stored.party;
-      const firstName =
-        Array.isArray(party) && typeof party[0]?.name === "string"
-          ? party[0].name.trim()
-          : "";
-      setGuestName(firstName || null);
-      if (
-        stored.perEventAttendance &&
-        typeof stored.perEventAttendance === "object"
-      ) {
-        setPerEventAttendance(
-          stored.perEventAttendance as Record<string, boolean>
-        );
-      }
-    });
-  }, []);
 
   const eligible = useMemo(
     () => eventsForTier(effectiveTier, config),
