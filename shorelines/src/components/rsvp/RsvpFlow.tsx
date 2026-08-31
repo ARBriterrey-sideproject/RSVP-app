@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import {
   onAuthStateChanged,
-  signInAnonymously,
   signInWithCustomToken,
+  type User,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -38,6 +38,7 @@ import { override } from "@/i18n/weddingCopy";
 import { StepDays } from "./steps/StepDays";
 import { StepDone } from "./steps/StepDone";
 import { StepParty } from "./steps/StepParty";
+import { StepPhone } from "./steps/StepPhone";
 import { StepTable } from "./steps/StepTable";
 import { StepTravel } from "./steps/StepTravel";
 
@@ -52,6 +53,16 @@ import { StepTravel } from "./steps/StepTravel";
 
 // See the sign-in effect below for why this has to live outside the component.
 let signInStarted = false;
+
+/**
+ * Whether this session is one an RSVP may be filed under.
+ *
+ * A recovery-code sign-in passes too — it's a custom token minted for the
+ * guest's own phone-derived uid, so it lands on the same document.
+ */
+function isVerified(user: User | null): user is User {
+  return user !== null && !user.isAnonymous;
+}
 
 export function RsvpFlow({
   tier,
@@ -107,15 +118,16 @@ export function RsvpFlow({
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
 
   const [screen, setScreen] = useState<Screen>("loading");
-  // True until the anonymous/recovery sign-in and the stored-doc read below
-  // both resolve, so the sticky CTA reads "One moment…" instead of a label for
-  // a screen ("days") that hasn't actually loaded yet.
+  // True until sign-in and the stored-doc read below both resolve, so the
+  // sticky CTA reads "One moment…" instead of a label for a screen ("days")
+  // that hasn't actually loaded yet.
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // An unverified contact number, captured on the party step — see StepParty.
-  // Anonymous Auth carries no phone claim, so this exists purely for the
-  // couple to reach the guest, never to establish identity.
+  // The number the couple should call on, captured on the party step — seeded
+  // from the verified number below, but editable, since the person filling the
+  // form isn't always the one who should be rung. Distinct from identity: the
+  // verified claim is read server-side in submitRsvp, never from here.
   const [phone, setPhone] = useState("");
 
   const [attending, setAttending] = useState<Record<string, boolean>>(() =>
@@ -138,22 +150,29 @@ export function RsvpFlow({
   }, [recoverCode]);
 
   // Establishes who this browser is talking to Firestore as. A recovery code
-  // exchanges for the guest's existing uid via a custom token; everyone else —
-  // which is nearly everyone, nearly every time, since the session persists —
-  // gets a silent anonymous session. Either way this only runs once: if
-  // Firebase already restored a session for this browser, onAuthStateChanged
-  // below fires with it immediately and there is nothing to establish.
+  // exchanges for the guest's existing uid via a custom token; everyone else
+  // verifies a phone number on the gate screen. Either way this only runs once:
+  // if Firebase already restored a session for this browser — which is the
+  // common case on a return visit — onAuthStateChanged below fires with it and
+  // there is nothing to establish.
+  //
+  // authStateReady() is what keeps a returning guest off the gate. currentUser
+  // is null until persistence has been read back, so deciding "no identity"
+  // synchronously would ask someone who is already signed in to verify again.
+  //
+  // An anonymous session counts as no identity here, not as a session to keep.
+  // /polls, /memories and /photos each sign in anonymously so a guest can use
+  // them without replying first, and that session persists — without this, a
+  // guest who voted in a poll before opening the invite would walk past the
+  // gate entirely and file an unverified reply.
   //
   // signInStarted is module-level, not a ref: Strict Mode double-invokes this
-  // effect before either signInAnonymously call resolves, so `auth.currentUser`
-  // is still null both times and a per-instance guard reset by the first
-  // invoke's own cleanup wouldn't close the window. Racing two calls creates
-  // two anonymous accounts, and whichever call's ID token wins by the time the
-  // other's Firestore read hits the wire causes a uid-mismatched, denied
-  // read — same pattern as connectEmulatorsOnce in client.ts.
+  // effect before the async work resolves, so `auth.currentUser` is still null
+  // both times and a per-instance guard reset by the first invoke's own cleanup
+  // wouldn't close the window — same pattern as connectEmulatorsOnce.
   useEffect(() => {
     const { auth, functions } = getFirebase();
-    if (auth.currentUser || signInStarted) return;
+    if (isVerified(auth.currentUser) || signInStarted) return;
     signInStarted = true;
 
     void (async () => {
@@ -167,12 +186,17 @@ export function RsvpFlow({
           await signInWithCustomToken(auth, data.token);
           return;
         } catch {
-          // An invalid or already-consumed code falls through to a fresh
-          // anonymous session rather than stranding the guest on a dead end —
-          // worst case they land on "days" instead of their old reply.
+          // An invalid or already-consumed code falls through to the phone gate
+          // rather than stranding the guest on a dead end — verifying the
+          // number they replied with lands them back on the same reply anyway.
         }
       }
-      await signInAnonymously(auth);
+
+      await auth.authStateReady();
+      if (isVerified(auth.currentUser)) return;
+
+      setBusy(false);
+      setScreen((current) => (current === "loading" ? "phone" : current));
     })();
   }, [recoverCode]);
 
@@ -184,13 +208,21 @@ export function RsvpFlow({
   useEffect(() => {
     const { auth, db } = getFirebase();
     return onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
+      // Anonymous is left to the gate above, not resolved here — reading
+      // rsvps/{anonUid} would find nothing and hand them the wizard.
+      if (!isVerified(user)) return;
 
       // Rules allow a guest to read only their own doc, keyed by uid.
       const snap = await getDoc(doc(db, "rsvps", user.uid));
       if (!snap.exists()) {
+        // They just verified this number, so asking for it again on the party
+        // step is asking twice. Editable there — the contact number isn't
+        // always the number that replied.
+        if (user.phoneNumber) setPhone(user.phoneNumber);
         setBusy(false);
-        setScreen((current) => (current === "loading" ? "days" : current));
+        setScreen((current) =>
+          current === "loading" || current === "phone" ? "days" : current
+        );
         return;
       }
       const stored = snap.data();
@@ -222,7 +254,9 @@ export function RsvpFlow({
       if (typeof stored.notes === "string") setNotes(stored.notes);
       setTravel(hydrateTravel(stored.travel));
       setBusy(false);
-      setScreen((current) => (current === "loading" ? "done" : current));
+      setScreen((current) =>
+        current === "loading" || current === "phone" ? "done" : current
+      );
     });
   }, [tier, config]);
 
@@ -254,8 +288,8 @@ export function RsvpFlow({
         perEventAttendance: attending,
         notes: notes.trim() || null,
         travel,
-        // Optional and unverified — Anonymous Auth carries no phone claim, so
-        // this is only ever the couple's way to call, never an identity.
+        // The couple's way to call, nothing more. Identity comes from the
+        // verified phone claim on the token, which the server reads itself.
         phone: toE164(phone) ?? (phone.trim() || null),
       });
 
@@ -320,8 +354,9 @@ export function RsvpFlow({
     else if (screen === "party") setScreen("days");
   }, [screen]);
 
-  // "days" is the first screen a guest ever sees — sign-in is silent, so
-  // there's nothing before it to go back to.
+  // "days" is the first screen of the wizard proper. Going back from it would
+  // mean back to the phone gate, and the guest is already verified by then —
+  // there is nothing there to return to.
   const canGoBack =
     screen === "party" || screen === "table" || screen === "travel";
 
@@ -336,7 +371,7 @@ export function RsvpFlow({
 
   return (
     <AppShell tab={screen === "done" ? "rsvp" : undefined} tier={effectiveTier} live={live}>
-      {screen !== "done" && screen !== "loading" && (
+      {screen !== "done" && screen !== "loading" && screen !== "phone" && (
         <header className="flex-none px-6 pt-4 pb-4">
           <div className="flex items-center justify-between">
             <button
@@ -398,13 +433,15 @@ export function RsvpFlow({
           </div>
         )}
 
+        {screen === "phone" && <StepPhone />}
+
         {screen === "days" && (
           <>
-            {/* Sign-in is silent (Anonymous Auth), so "days" — not an
-                identity step — is the first thing a guest ever sees. The
-                switcher lives here, before they've read anything else; past
-                this point they've already chosen, and a language control
-                beside the form fields is one more thing to mis-tap. */}
+            {/* Repeated from the phone gate on purpose: a guest whose session
+                persisted but who never finished the wizard reaches "days"
+                without passing the gate, and this is their only chance to
+                switch. Past this point they've already chosen, and a language
+                control beside the form fields is one more thing to mis-tap. */}
             <LanguageSwitcher className="justify-center pb-5" />
 
             <div className="pb-6 text-center">
@@ -487,7 +524,7 @@ export function RsvpFlow({
         )}
       </div>
 
-      {screen !== "done" && screen !== "loading" && (
+      {screen !== "done" && screen !== "loading" && screen !== "phone" && (
         <div className="flex-none bg-gradient-to-b from-transparent to-sand to-40% px-6 pt-3.5 pb-[26px]">
           <button
             type="button"

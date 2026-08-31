@@ -559,9 +559,9 @@ export const submitRsvp = onCall(
       const shareCode: string =
         (existing.get("shareCode") as string | undefined) ?? newShareCode();
 
-      // Anonymous Auth carries no phone claim and no other durable credential,
-      // so this is the only way back into the reply from a new device — never
-      // mirrored into invites/{shareCode}, which is public.
+      // The way back in when the verified number itself is gone — a lost phone,
+      // a dead SIM, someone who replied on a relative's handset. Never mirrored
+      // into invites/{shareCode}, which is public.
       const recoveryCode: string =
         (existing.get("recoveryCode") as string | undefined) ??
         newRecoveryCode();
@@ -576,6 +576,11 @@ export const submitRsvp = onCall(
         notes,
         // Unverified — typed by the guest, kept only for the couple to call.
         submittedByPhone: phone,
+        // Read off the token, never off the payload: this is the number the
+        // reply is provably tied to, and the reason two replies can't share
+        // one. Distinct from submittedByPhone, which the guest may change to
+        // whoever should actually be rung.
+        verifiedPhone: request.auth?.token.phone_number ?? null,
         shareCode,
         recoveryCode,
         updatedAt: FieldValue.serverTimestamp(),
@@ -623,10 +628,10 @@ export const submitRsvp = onCall(
 );
 
 /**
- * Format-checked only, never verified — Anonymous Auth carries no phone
- * claim, so this is the guest's own typed number, kept for the couple to
- * call rather than to establish identity. Optional: a guest who skips it
- * still gets to RSVP.
+ * Format-checked only, never verified. This is the number the guest typed for
+ * the couple to call — usually the one they verified, but editable, so it
+ * proves nothing. Identity is `verifiedPhone`, read off the token. Optional: a
+ * guest who clears it still gets to RSVP.
  */
 function optionalPhone(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return null;
@@ -643,10 +648,10 @@ function optionalPhone(value: unknown): string | null {
 /**
  * Exchanges a guest's recovery code for a sign-in token.
  *
- * Anonymous Auth has no password and no verified phone number, so the
- * recovery code minted by submitRsvp is the only way back into an existing
- * reply from a new device or a cleared browser. The rules deny `list` on
- * `rsvps` to anyone but staff, so this lookup has to happen here, with the
+ * The fallback path, not the usual one: a guest normally gets back into their
+ * reply by verifying the same number again, which resolves to the same uid.
+ * This is for when that number can't be reached at all. The rules deny `list`
+ * on `rsvps` to anyone but staff, so the lookup has to happen here, with the
  * Admin SDK, rather than as a client-side query.
  */
 export const recoverRsvp = onCall(
@@ -1522,9 +1527,11 @@ function isValidRoomId(roomId: string): boolean {
 }
 
 /**
- * Spam is the one new risk a guest write surface introduces: open access plus
- * anonymous identity means chat is the first genuinely high-frequency write
- * path in the app (everything else is one RSVP, one vote, one song request).
+ * Spam is the one new risk a guest write surface introduces: chat is the first
+ * genuinely high-frequency write path in the app — everything else is one RSVP,
+ * one vote, one song request, so the shape of the write is its own limit. A
+ * verified number raises the cost of a throwaway identity but doesn't cap how
+ * fast the one identity a guest already has can post.
  * A guest under cooldown is rejected before the message is written; staff are
  * exempt, since a rostered account isn't the thing this is guarding against.
  */

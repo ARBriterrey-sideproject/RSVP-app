@@ -3,8 +3,8 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * The golden-path suite talks to a real `next dev` server backed by the
  * Firebase emulators — there is no mocking layer in this app (see CLAUDE.md:
- * guest identity is Anonymous Auth against real Firestore/Functions rules),
- * so "start the app for real" is the only way to exercise it.
+ * guest identity is a real phone verification against real Firestore/Functions
+ * rules), so "start the app for real" is the only way to exercise it.
  *
  * The emulators themselves are NOT started here. Run
  * `firebase emulators:start` (and `cd functions && npm run build` at least
@@ -56,6 +56,14 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_USE_FIREBASE_EMULATOR: "true",
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-shorelines",
+      // Passed through rather than pinned: whoever moved the emulator off
+      // 8080 (see tests/rules/env.ts) needs the spawned dev server to follow.
+      ...(process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT
+        ? {
+            NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT:
+              process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT,
+          }
+        : {}),
     },
   },
 });

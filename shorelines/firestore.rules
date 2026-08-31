@@ -129,7 +129,7 @@ service cloud.firestore {
       allow write: if isCouple();
     }
 
-    // One vote per anonymous-auth uid per poll is enforced by the compound doc
+    // One vote per uid per poll is enforced by the compound doc
     // id (`{pollId}_{ownerUid}`) plus the castVote callable's `.create()`, which
     // throws if that id already exists — no transaction needed. Reads are open
     // to signed-in guests so results render live.
@@ -166,9 +166,12 @@ service cloud.firestore {
     // ---- Chat: one open group room, plus one concierge thread per guest ----
     // roomId is either "group" (everyone attending, plus staff) or
     // "dm_{ownerUid}" (a single guest talking to the coordinators — there is no
-    // guest-to-guest messaging by design; access here is open and anonymous,
-    // which is a fine trust model for a moderated room staff can see and a bad
-    // one for unsupervised stranger-to-stranger DMs). All writes go through
+    // guest-to-guest messaging by design; access here is open to anyone signed
+    // in, which is a fine trust model for a moderated room staff can see and a
+    // bad one for unsupervised stranger-to-stranger DMs — and "signed in" is
+    // not the same bar as "replied": a guest who only ever opened /polls holds
+    // an anonymous session, so isSignedIn() here is weaker than the phone
+    // verification the RSVP gate insists on). All writes go through
     // sendChatMessage / moderateChatMessage so the room-targeting rule below
     // (a guest may only address their own dm_ room) and the per-uid send
     // cooldown are enforced somewhere the client cannot bypass.

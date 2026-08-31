@@ -16,4 +16,8 @@ CLAUDE.md
 # own 1.10 is closed and that's no longer true.
 /OWED.md
 
+# Vercel CLI project link. Machine-local — it names a project and org id, and
+# `vercel link` recreates it on any other machine.
+/.vercel/
+
 .DS_Store

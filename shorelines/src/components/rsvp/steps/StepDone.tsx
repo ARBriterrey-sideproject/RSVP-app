@@ -152,8 +152,8 @@ export function StepDone({
       {!declined && shareCode && <FamilyShare shareCode={shareCode} />}
 
       {/* Unlike the family QR, this matters whether they're coming or not —
-          it's the guest's own way back to change either answer, and there's
-          no email or password behind Anonymous Auth to fall back on. */}
+          it's a way back to change either answer without waiting on an SMS,
+          and the one that still works from a number they've since lost. */}
       {recoveryCode && <RecoveryLink recoveryCode={recoveryCode} tier={tier} />}
       {recoveryCode && <InstallPrompt recoveryCode={recoveryCode} />}
 

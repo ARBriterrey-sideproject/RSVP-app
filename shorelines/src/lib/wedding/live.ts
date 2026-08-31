@@ -22,7 +22,11 @@ import type { WeddingConfig, WeddingOverlay } from "@/content/schema";
  * The one cost is decoding Firestore's REST value envelope by hand, below.
  */
 
-const EMULATOR_HOST = "http://127.0.0.1:8080";
+// Port override: see the note beside connectFirestoreEmulator in
+// src/lib/firebase/client.ts — the two have to agree.
+const EMULATOR_HOST = `http://127.0.0.1:${
+  process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? "8080"
+}`;
 
 export interface ReadOptions {
   /**

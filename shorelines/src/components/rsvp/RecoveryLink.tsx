@@ -8,10 +8,10 @@ import { Eyebrow } from "./ui";
 /**
  * The guest's own way back in.
  *
- * Identity here is Anonymous Auth, not a phone number — there is no OTP to
- * re-verify and nothing to "log in" with. The session persists in this
- * browser, but a cleared cache or a second device has no way back to an
- * existing reply without this link. `recoveryCode` is a bearer credential
+ * Re-verifying the same number is the ordinary way back, so this is the
+ * fallback for when that number can't be reached: a lost phone, a dead SIM, a
+ * reply filed on someone else's handset, a venue with no signal. `recoveryCode`
+ * is a bearer credential
  * (`recoverRsvp` trades it for a sign-in token with no other check), so this
  * card only ever renders it — the code itself is never sent anywhere except
  * inside a link the guest chose to save.

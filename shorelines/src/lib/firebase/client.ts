@@ -28,6 +28,11 @@ import {
 const USE_EMULATOR =
   process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true";
 
+const FIRESTORE_EMULATOR_PORT = Number.parseInt(
+  process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? "8080",
+  10
+);
+
 /**
  * With the emulator these values are never validated, so any non-empty string
  * works. That is what lets the whole app run before a real project exists.
@@ -65,7 +70,11 @@ function connectEmulatorsOnce(
   connectAuthEmulator(auth, "http://127.0.0.1:9099", {
     disableWarnings: true,
   });
-  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  // Port overridable for the same reason the rules suites allow it (see
+  // tests/rules/env.ts): 8080 is a popular port, and someone else's container
+  // sitting on it shouldn't make the app unrunnable locally. Move it here,
+  // in src/lib/wedding/live.ts, and in firebase.json together.
+  connectFirestoreEmulator(db, "127.0.0.1", FIRESTORE_EMULATOR_PORT);
   connectFunctionsEmulator(fns, "127.0.0.1", 5001);
   connectStorageEmulator(storage, "127.0.0.1", 9199);
 }

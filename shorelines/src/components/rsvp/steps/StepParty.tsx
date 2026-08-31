@@ -32,7 +32,7 @@ export function StepParty({
   party,
   onChange,
 }: {
-  /** Optional and unverified — see the doc comment on RsvpFlow's `phone` state. */
+  /** Who to call, not who they are — see the doc comment on RsvpFlow's `phone` state. */
   phone: string;
   onPhoneChange: (next: string) => void;
   party: PartyMember[];

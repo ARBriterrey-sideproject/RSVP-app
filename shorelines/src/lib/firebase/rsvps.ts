@@ -23,7 +23,14 @@ export interface RsvpRecord {
     wantsPickup: boolean;
   };
   notes: string;
+  /** The editable "call me on" number from the party step. Proves nothing. */
   submittedByPhone: string | null;
+  /**
+   * The number this reply is provably tied to — read off the auth token by
+   * `submitRsvp`, never client-supplied, and the reason two replies can't share
+   * one. Null only on a reply filed before the phone gate existed.
+   */
+  verifiedPhone: string | null;
   shareCode: string;
   recoveryCode: string;
   flagged: boolean;
@@ -64,6 +71,8 @@ export async function listRsvps(): Promise<RsvpRecord[]> {
       notes: typeof data.notes === "string" ? data.notes : "",
       submittedByPhone:
         typeof data.submittedByPhone === "string" ? data.submittedByPhone : null,
+      verifiedPhone:
+        typeof data.verifiedPhone === "string" ? data.verifiedPhone : null,
       shareCode: typeof data.shareCode === "string" ? data.shareCode : "",
       recoveryCode: typeof data.recoveryCode === "string" ? data.recoveryCode : "",
       flagged: data.flagged === true,

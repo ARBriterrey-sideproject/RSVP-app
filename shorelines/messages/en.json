@@ -170,6 +170,30 @@
       "nameRequired": "Add your name so we know whose reply this is.",
       "saveFailed": "We couldn’t save that."
     },
+    "phone": {
+      "title": "Your mobile number",
+      "intro": "We’ll send you a 6-digit code. It keeps this reply yours, and lets you change it later from any phone.",
+      "numberLabel": "Mobile number",
+      "numberHint": "An Indian number works without the country code. Dialling in from abroad? Start with +.",
+      "send": "Send code",
+      "sending": "Sending…",
+      "codeTitle": "Enter the code",
+      "codeIntro": "We sent a 6-digit code to {phone}.",
+      "codeLabel": "6-digit code",
+      "codeHint": "It can take a minute to arrive.",
+      "verify": "Verify",
+      "verifying": "Verifying…",
+      "resend": "Send it again",
+      "changeNumber": "Different number",
+      "errors": {
+        "badNumber": "Enter a valid mobile number, or include the country code.",
+        "badCode": "That code doesn’t match. Check it and try again.",
+        "expired": "That code has expired. Ask for a new one.",
+        "tooMany": "Too many attempts. Please wait a little and try again.",
+        "network": "We couldn’t reach the network. Check your connection.",
+        "generic": "We couldn’t verify that number. Please try again."
+      }
+    },
     "days": {
       "title": "Which days?",
       "intro": "Tell us where to save you a seat. Nothing is compulsory — come to what you can."
@@ -179,8 +203,8 @@
       "intro": "Add everyone travelling under your invitation.",
       "primaryGuest": "Primary guest",
       "yourName": "Your full name",
-      "phoneLabel": "Mobile number (optional)",
-      "phoneHint": "Only if you’d like us to reach you directly — not required.",
+      "phoneLabel": "Contact number",
+      "phoneHint": "The number we’ll call on — already filled in from the one you verified. Change it if someone else should be reached.",
       "addNames": "Add their names now",
       "namesLater": "I’ll add names later",
       "footnote": "Party of {count}. You can change this until {date}.",
@@ -250,7 +274,7 @@
     },
     "recovery": {
       "title": "Your way back in",
-      "body": "Save this link to come back and change your reply from another device — there’s no password behind it, so this link is the only way back.",
+      "body": "You can come back and change your reply any time by verifying the same number again. Save this link too, for a phone you can’t reach — it opens your reply without a code.",
       "copy": "Copy the link",
       "copied": "Link copied"
     },

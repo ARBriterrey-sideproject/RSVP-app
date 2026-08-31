@@ -17,7 +17,10 @@ import { sendMemory } from "@/lib/firebase/memories";
 import { tierCode, type Tier } from "@/content/wedding";
 
 // Module-level, not component state, so React Strict Mode's double-invoke
-// can't fire signInAnonymously twice — same guard RsvpFlow.tsx uses.
+// can't fire signInAnonymously twice — same guard PollsScreen.tsx uses. The
+// `!auth.currentUser` check in front of it is what lets a guest who already
+// verified a phone number on /rsvp keep that identity here instead of being
+// handed a second, anonymous one.
 let signInStarted = false;
 
 interface SentMessage {

@@ -47,16 +47,14 @@ export function emptyTravel(): Travel {
 /**
  * The four numbered steps of screen 1c, in the mockup's own order.
  *
- * There is no identity step. The mockup opens on "Which days?" because it
- * treats the guest as already known, and Anonymous Auth makes that literally
- * true — sign-in is silent, so "loading" (resolving the anonymous session, and
- * any stored reply for it) is the only screen before "days", and it is not one
- * of the four numbered ones. That is what lets the progress bar read 1/4–4/4
- * exactly as designed instead of growing a fifth segment.
+ * Phone verification is deliberately NOT one of them. It's a gate in front of
+ * the wizard, not a step inside it — the mockup opens on "Which days?" and the
+ * progress bar reads 1/4–4/4 as designed. "loading" and "phone" both sit
+ * outside STEPS for that reason.
  */
 export const STEPS = ["days", "party", "table", "travel"] as const;
 export type Step = (typeof STEPS)[number];
-export type Screen = "loading" | Step | "done";
+export type Screen = "loading" | "phone" | Step | "done";
 
 export function makeMember(ageGroup: "adult" | "child" = "adult"): PartyMember {
   return {

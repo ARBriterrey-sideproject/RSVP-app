@@ -160,10 +160,22 @@ export function TravelPanel() {
               ) : null}
             </div>
 
-            {record.submittedByPhone ? (
-              <p className="mt-2 border-t border-hairline/60 pt-2 font-sans text-[12px] text-driftwood-faint">
-                {record.submittedByPhone}
-              </p>
+            {record.submittedByPhone || record.verifiedPhone ? (
+              <div className="mt-2 border-t border-hairline/60 pt-2 font-sans text-[12px] text-driftwood-faint">
+                <p>{record.submittedByPhone ?? record.verifiedPhone}</p>
+                {/* Only when they disagree. The contact field is seeded from the
+                    verified number, so printing both would repeat one string on
+                    almost every card — the case worth seeing is the guest who
+                    changed it, where the number to ring isn't the number the
+                    reply is tied to. */}
+                {record.verifiedPhone &&
+                record.submittedByPhone &&
+                record.verifiedPhone !== record.submittedByPhone ? (
+                  <p className="mt-0.5">
+                    Verified as {record.verifiedPhone}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </div>
         ))}
