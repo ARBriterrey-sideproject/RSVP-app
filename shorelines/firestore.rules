@@ -182,6 +182,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // The dashboard reads every room at once (`allChatMessagesQuery`, a
+    // collectionGroup query over "messages" — the matching COLLECTION_GROUP
+    // index is already in firestore.indexes.json). A collection-group query is
+    // NOT covered by the nested match above: that rule only applies to paths
+    // rooted at /chats, and a group query is rooted at nothing. Without this
+    // block it falls through to the catch-all deny at the bottom and the panel
+    // renders an empty room while logging permission-denied for 'list' —
+    // silently, which is how it survived to a demo.
+    //
+    // Deliberately staff-only. Guests read one room at a time by its full path
+    // and are served by the nested rule; nothing guest-facing issues a group
+    // query, so widening this past isStaff() would only grant a guest the one
+    // thing the nested rule exists to withhold — everyone else's DMs.
+    match /{path=**}/messages/{messageId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
     // ---- Photo album visibility (v2) ---------------------------------------
     // One doc per event, defaulting to "private" when absent. Guests never read
     // this — there is no in-app gallery yet, upload-only this round — so it's

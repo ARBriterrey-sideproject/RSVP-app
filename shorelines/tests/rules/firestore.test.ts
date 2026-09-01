@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from "@firebase/rules-unit-testing";
-import { collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, type Firestore } from "firebase/firestore";
+import { collection, collectionGroup, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, type Firestore } from "firebase/firestore";
 import { makeFirestoreTestEnv } from "./env";
 
 /**
@@ -322,6 +322,72 @@ describe("memories/{memoryId} — the couple's private inbox", () => {
       .authenticatedContext("couple-1", { role: "couple" })
       .firestore();
     await assertSucceeds(deleteDoc(doc(coupleDb, "memories", "m1")));
+  });
+});
+
+describe("chats/{roomId}/messages — the group room and the concierge threads", () => {
+  beforeEach(async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, "chats", "group", "messages", "m1"), {
+        authorUid: "guest-1",
+        text: "hello everyone",
+      });
+      await setDoc(doc(db, "chats", "dm_guest-1", "messages", "m2"), {
+        authorUid: "guest-1",
+        text: "where do I park?",
+      });
+      await setDoc(doc(db, "chats", "dm_guest-2", "messages", "m3"), {
+        authorUid: "guest-2",
+        text: "any vegan options?",
+      });
+    });
+  });
+
+  it("opens the group room to anyone signed in but never to a stranger", async () => {
+    const guestDb = testEnv.authenticatedContext("guest-1").firestore();
+    await assertSucceeds(getDoc(doc(guestDb, "chats", "group", "messages", "m1")));
+
+    const strangerDb = testEnv.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(strangerDb, "chats", "group", "messages", "m1")));
+  });
+
+  it("keeps one guest out of another guest's concierge thread", async () => {
+    const guestDb = testEnv.authenticatedContext("guest-1").firestore();
+    await assertSucceeds(
+      getDoc(doc(guestDb, "chats", "dm_guest-1", "messages", "m2"))
+    );
+    await assertFails(
+      getDoc(doc(guestDb, "chats", "dm_guest-2", "messages", "m3"))
+    );
+  });
+
+  it("never accepts a client write — sendChatMessage is the only path", async () => {
+    const adminDb = testEnv
+      .authenticatedContext("admin-1", { role: "admin" })
+      .firestore();
+    await assertFails(
+      setDoc(doc(adminDb, "chats", "group", "messages", "m4"), { text: "x" })
+    );
+  });
+
+  /*
+   * The dashboard's Live chat panel reads every room at once with a
+   * collectionGroup query (allChatMessagesQuery). That is NOT covered by the
+   * nested chats/{roomId}/messages match — a group query is rooted at nothing,
+   * so it needs its own /{path=**}/messages rule. Shipping without it renders
+   * an empty panel and logs a permission-denied for 'list', which is quiet
+   * enough to reach a demo; these two cases are what stops that recurring.
+   */
+  it("lets staff run the collection-group query the dashboard depends on", async () => {
+    const coordinatorDb = testEnv
+      .authenticatedContext("coordinator-1", { role: "coordinator" })
+      .firestore();
+    await assertSucceeds(getDocs(collectionGroup(coordinatorDb, "messages")));
+  });
+
+  it("refuses that same group query to a guest — it would hand over every DM", async () => {
+    const guestDb = testEnv.authenticatedContext("guest-1").firestore();
+    await assertFails(getDocs(collectionGroup(guestDb, "messages")));
   });
 });
 

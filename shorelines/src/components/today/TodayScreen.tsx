@@ -264,21 +264,29 @@ function SongRequestBanner({
 
       {open ? (
         <div className="mt-3.5 flex flex-col gap-2.5 border-t border-driftwood/[0.08] pt-3.5">
+          {/*
+            The placeholder is the only visible copy here, so it has to be
+            mirrored into aria-label: a placeholder is not an accessible name,
+            and without this a screen reader announces three bare edit fields.
+          */}
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            aria-label={t("songRequests.titleLabel")}
             placeholder={t("songRequests.titleLabel")}
             className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
           />
           <input
             value={artist}
             onChange={(e) => setArtist(e.target.value)}
+            aria-label={t("songRequests.artistLabel")}
             placeholder={t("songRequests.artistLabel")}
             className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
           />
           <input
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            aria-label={t("songRequests.noteLabel")}
             placeholder={t("songRequests.noteLabel")}
             className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
           />
@@ -342,7 +350,7 @@ export function TodayScreen({
   // Same pattern as ScheduleScreen and RsvpFlow: the stored tier, guest name
   // and per-event replies can only come from the guest's own Firestore
   // document, never the link they arrived on. Shared with UpcomingScreen.
-  const { storedTier, guestName, perEventAttendance } = useGuestRsvp();
+  const { storedTier, guestName, perEventAttendance, loaded } = useGuestRsvp();
   const effectiveTier = storedTier ?? tier;
 
   const eligible = useMemo(
@@ -498,6 +506,19 @@ export function TodayScreen({
           86_400_000
       )
     : 0;
+
+  // Everything below is the guest's *own* day, derived from a reply that takes
+  // a round trip to read. Rendering before it lands shows every tier-eligible
+  // event — including ones they declined — and then silently drops them a
+  // moment later, which reads as the app changing its mind. UpcomingScreen
+  // holds its reply card back the same way.
+  if (!loaded) {
+    return (
+      <AppShell tab="today" tier={effectiveTier}>
+        <div className="flex-1" aria-busy="true" />
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell tab="today" tier={effectiveTier}>
