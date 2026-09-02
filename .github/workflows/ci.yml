@@ -28,6 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Firestore, Auth and Storage emulators are Java processes, and
+      # firebase-tools refuses to launch them on a JDK older than 21. The
+      # ubuntu-latest image still defaults to 17, so pin one explicitly
+      # rather than inheriting whatever the runner image happens to ship.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
