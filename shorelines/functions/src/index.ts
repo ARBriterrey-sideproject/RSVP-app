@@ -24,6 +24,7 @@ const TIERS = ["full", "wedding_only", "reception_only"] as const;
 type Tier = (typeof TIERS)[number];
 
 const EVENT_IDS = [
+  "engagement",
   "mehendi",
   "haldi",
   "sangeet",
@@ -1508,6 +1509,7 @@ function newRecoveryCode(): string {
  * here or the song-request cutoff silently desyncs from what guests see.
  */
 const EVENT_START_TIMES: Record<string, { startsAt: string; endsAt: string }> = {
+  engagement: { startsAt: "2026-12-28T17:00:00+05:30", endsAt: "2026-12-28T18:30:00+05:30" },
   mehendi: { startsAt: "2026-12-28T19:00:00+05:30", endsAt: "2026-12-28T21:00:00+05:30" },
   haldi: { startsAt: "2026-12-29T10:00:00+05:30", endsAt: "2026-12-29T14:00:00+05:30" },
   sangeet: { startsAt: "2026-12-29T18:00:00+05:30", endsAt: "2026-12-29T21:00:00+05:30" },

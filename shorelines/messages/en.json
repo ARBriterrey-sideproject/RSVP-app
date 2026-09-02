@@ -166,12 +166,19 @@
     "willYouBeWithUs": "Will you be with us?",
     "replyBy": "Kindly reply by {date}",
     "ctaRsvp": "RSVP for your family",
+    "replied": {
+      "title": "You’ve already replied",
+      "titleNamed": "You’re on the list, {name}",
+      "body": "Your reply is saved for {count, plural, =1 {one guest} other {# guests}}.",
+      "bodyDeclined": "You’ve told us you can’t make it. If anything changes, you can still update your reply.",
+      "cta": "View or change your reply"
+    },
     "dashboardLogin": "Staff login",
     "signOff": "see you by the water",
     "travelHeading": "Travel & stay",
     "trainTo": "Train to {station}",
     "flyInto": "Fly into {code} ({city})",
-    "travelNote": "Tell us how you’re arriving when you RSVP and we’ll send a car.",
+    "travelNote": "Tell us how you’re arriving when you RSVP, so we know when to expect you.",
     "photoPlaceholder": "Photo — couple on the shore"
   },
   "rsvp": {
@@ -258,7 +265,7 @@
     },
     "travel": {
       "title": "Getting there",
-      "intro": "So we know when you land and can send a car. Skip anything you haven’t booked yet.",
+      "intro": "So we know when you land. Skip anything you haven’t booked yet.",
       "arriving": "Arriving",
       "arrivingDate": "Arrival date",
       "leaving": "Leaving",
@@ -282,8 +289,6 @@
       "mixedMenu": "Mixed",
       "arriving": "Arriving",
       "comingBy": "Coming by",
-      "pickup": "Pickup",
-      "pickupYes": "Yes, please",
       "changeReply": "Change my reply"
     },
     "share": {

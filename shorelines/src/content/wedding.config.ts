@@ -21,13 +21,19 @@ import type { WeddingConfig } from "./schema";
  *
  * The couple sent `maps.app.goo.gl` short links; these are what those expand
  * to. Naming them once here is the one concession to "no derived values" in
- * this file — four events share the resort, and four copies of a 60-character
- * address is four chances to fix three of them.
+ * this file — five events share the resort, and five copies of a 60-character
+ * address is five chances to fix four of them.
+ *
+ * The CIDs come from the same two resolved links and are what "Get directions"
+ * actually uses; the address is now the fallback. See `mapsCid` in schema.ts
+ * for why, and `mapsUrl` in wedding.ts for the order.
  */
 const GOPALPUR_RESORT =
   "Gopalpur Resort, near Gopalpur Light House, Gopalpur, Brahmapur, Odisha 761002, India";
+const GOPALPUR_RESORT_CID = "3510606475280429491";
 const OTDC_PANTHANIVAS =
-  "OTDC Panthanivas, Gopalpur, Boxipalli, Odisha 761002, India";
+  "OTDC Panthanivas, Gopalpur, Gopalpur, Boxipalli, Odisha 761002, India";
+const OTDC_PANTHANIVAS_CID = "2910290587342671172";
 
 export const weddingConfig: WeddingConfig = {
   configVersion: 1,
@@ -67,7 +73,12 @@ export const weddingConfig: WeddingConfig = {
    * nearest airport at roughly 170km, and Brahmapur is the nearest railhead at
    * roughly 16km, which is why the transport picker offers train as a
    * first-class option rather than an afterthought. Distances are approximate.
-   * The shuttle and the room block are PLACEHOLDERS: neither is arranged yet.
+   *
+   * The shuttle and the room block are both OFF at the couple's request: they
+   * don't want to promise a car or a held room to everyone who opens the link,
+   * and neither was ever arranged. The rows, the RSVP pickup toggle and the
+   * two prose mentions all read these flags, so this is the whole change — the
+   * copy below stays as the wording to restore if either is ever laid on.
    */
   logistics: {
     airport: {
@@ -81,13 +92,12 @@ export const weddingConfig: WeddingConfig = {
       distanceKm: 16,
     },
     shuttle: {
-      // Still true to preserve today's live guest-facing behaviour — flip
-      // to false once the couple decides not to arrange it (see schema.ts).
-      available: true,
+      available: false,
       title: "Pickup from airport or station",
       description: "Tell us your arrival and we'll send a car",
     },
     stay: {
+      available: false,
       description:
         "Held under your name until 15 December. Sea-facing on request.",
     },
@@ -102,9 +112,21 @@ export const weddingConfig: WeddingConfig = {
    * said they'd confirm, so treat OTDC Panthanivas as their current intention,
    * not a settled fact, and expect to change that one row.
    *
-   * `mapsQuery` is the place string Google's own short link resolves to, not
-   * the short link itself: `mapsUrl` builds a `maps.google.com/?q=` search, and
-   * a resolved address can't quietly stop working the way a shortener can.
+   * `mapsCid` is the Google Maps place id "Get directions" links to, and
+   * `mapsQuery` — the place string Google's own short link resolves to — is the
+   * fallback. Neither is the short link itself: a shortener is a redirect
+   * someone else can retire, while both of these are the place's own facts.
+   *
+   * The Engagement and Ring Exchange is the couple's addition, on the 28th
+   * before the Mehendi. **Its time is a working figure, not a confirmed one** —
+   * the couple said "say 28th Dec"; 5 pm sets the ring exchange at sunset and
+   * leaves half an hour before the Mehendi opens at 7. They can move it, and
+   * the Mehendi they're still unsure about, from the dashboard without a
+   * rebuild — times are overlay data (see WeddingOverlay in schema.ts).
+   *
+   * It reuses `warmgold` because there are five accent names and six events;
+   * the Haldi is on a different day, so the two never sit adjacent except in
+   * the landing's full list.
    *
    * `venueShort` is the property name too, so it repeats across four events on
    * the landing — the thing its own doc comment warns about. That's the honest
@@ -114,13 +136,28 @@ export const weddingConfig: WeddingConfig = {
    * Dress codes are still PLACEHOLDERS (acceptable as written, per the couple).
    *
    * Tier visibility is the real logic here:
-   *   full            → all five ceremonies
+   *   full            → all six ceremonies
    *   wedding_only    → the wedding
    *   reception_only  → the reception
    *
    * Order is chronological and load-bearing.
    */
   events: [
+    {
+      id: "engagement",
+      name: "Engagement and Ring Exchange",
+      startsAt: "2026-12-28T17:00:00+05:30",
+      endsAt: "2026-12-28T18:30:00+05:30",
+      venue: "Gopalpur Resort",
+      venueShort: "Gopalpur Resort",
+      mapsQuery: GOPALPUR_RESORT,
+      mapsCid: GOPALPUR_RESORT_CID,
+      // PLACEHOLDER, like every other dress code here.
+      dressCode: "Soft pastels",
+      daypart: "Sunset",
+      tiers: ["full"],
+      accent: "warmgold",
+    },
     {
       id: "mehendi",
       name: "Mehendi",
@@ -129,6 +166,7 @@ export const weddingConfig: WeddingConfig = {
       venue: "Gopalpur Resort",
       venueShort: "Gopalpur Resort",
       mapsQuery: GOPALPUR_RESORT,
+      mapsCid: GOPALPUR_RESORT_CID,
       dressCode: "Linen & green",
       daypart: "Evening",
       tiers: ["full"],
@@ -142,6 +180,7 @@ export const weddingConfig: WeddingConfig = {
       venue: "Gopalpur Resort",
       venueShort: "Gopalpur Resort",
       mapsQuery: GOPALPUR_RESORT,
+      mapsCid: GOPALPUR_RESORT_CID,
       dressCode: "Wear yellow · barefoot",
       daypart: "Morning",
       tiers: ["full"],
@@ -155,6 +194,7 @@ export const weddingConfig: WeddingConfig = {
       venue: "Gopalpur Resort",
       venueShort: "Gopalpur Resort",
       mapsQuery: GOPALPUR_RESORT,
+      mapsCid: GOPALPUR_RESORT_CID,
       dressCode: "Dance-ready",
       daypart: "Evening",
       tiers: ["full"],
@@ -169,6 +209,7 @@ export const weddingConfig: WeddingConfig = {
       venue: "OTDC Panthanivas",
       venueShort: "OTDC Panthanivas",
       mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Formal ivory",
       daypart: "Morning",
       tiers: ["full", "wedding_only"],
@@ -183,6 +224,7 @@ export const weddingConfig: WeddingConfig = {
       venue: "Gopalpur Resort",
       venueShort: "Gopalpur Resort",
       mapsQuery: GOPALPUR_RESORT,
+      mapsCid: GOPALPUR_RESORT_CID,
       dressCode: "Formal",
       daypart: "Evening",
       tiers: ["full", "reception_only"],

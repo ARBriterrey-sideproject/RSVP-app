@@ -2,25 +2,30 @@
 
 import { useTranslations } from "next-intl";
 import {
-  LOGISTICS,
   TRANSPORT_MODES,
   WEDDING_DATES,
   type TransportMode,
 } from "@/content/wedding";
-import { logisticsCopy, transportCopy } from "@/i18n/weddingCopy";
+import { transportCopy } from "@/i18n/weddingCopy";
 import type { Travel } from "../types";
-import { Card, Eyebrow, RadioDot, StepIntro, StepTitle, Toggle } from "../ui";
+import { Card, Eyebrow, RadioDot, StepIntro, StepTitle } from "../ui";
 
 /**
  * Step 4 — "Getting there".
  *
  * Everything here is optional. A guest driving down should be able to hit Send
  * RSVP without touching a single field, so nothing on this step ever blocks
- * submission — it exists to help the couple arrange cars, not to interrogate.
+ * submission — it exists to tell the couple who is around when, not to
+ * interrogate.
  *
  * Stay is deliberately absent: nothing here books a room, so a card about one
- * mid-form reads as a booking step the guest has to deal with. The room block
- * stays on the landing, where it's plainly just information.
+ * mid-form reads as a booking step the guest has to deal with.
+ *
+ * It used to ask two more things — a flight/train number and a "send a car"
+ * toggle. Both went at the couple's request: no pickup is being arranged, and
+ * they book their own relatives' train tickets, so a service number had nobody
+ * on the other side of it waiting to meet anyone. Dates and mode are what's
+ * left, and all three are still enough to plan a weekend around.
  */
 export function StepTravel({
   travel,
@@ -34,12 +39,6 @@ export function StepTravel({
 
   const set = <K extends keyof Travel>(key: K, value: Travel[K]) =>
     onChange({ ...travel, [key]: value });
-
-  const serviceLabel = travel.mode
-    ? transportCopy(tWedding, travel.mode).serviceLabel
-    : undefined;
-
-  const shuttle = logisticsCopy(tWedding, "shuttle", LOGISTICS.shuttle);
 
   return (
     <div className="animate-fade-in">
@@ -88,65 +87,18 @@ export function StepTravel({
           );
         })}
       </ul>
-
-      {/*
-        Only shown once a mode is picked, and never for "self" — there is no
-        service number for a car. Asking for a flight number before knowing
-        whether they're flying is the mockup's mistake, not one to reproduce.
-      */}
-      {serviceLabel && (
-        <Card className="mt-2.5 px-4 py-3.5">
-          <Eyebrow>{serviceLabel}</Eyebrow>
-          <input
-            value={travel.serviceNumber}
-            onChange={(e) =>
-              set("serviceNumber", e.target.value.toUpperCase().slice(0, 24))
-            }
-            aria-label={serviceLabel}
-            /* Left untranslated: both are literal things printed on a ticket
-               in Latin script, and the guest types them back the same way. */
-            placeholder={travel.mode === "train" ? "12703 Falaknuma" : "6E 512"}
-            autoComplete="off"
-            className="mt-2 w-full bg-transparent font-sans text-base leading-snug text-driftwood outline-none placeholder:text-driftwood-faint"
-          />
-        </Card>
-      )}
-
-      {/* Same rule as the service number: there is nothing to send a car for
-          until we know they're arriving somewhere a car can meet them. Also
-          gated on LOGISTICS.shuttle.available — nothing offers a pickup that
-          isn't arranged. */}
-      {LOGISTICS.shuttle.available && travel.mode && travel.mode !== "self" && (
-        <Card className="mt-2.5 flex items-center gap-3.5">
-          <div className="flex-1">
-            <div className="font-sans text-[15px] font-medium leading-tight text-driftwood">
-              {shuttle.title}
-            </div>
-            <div className="mt-0.5 font-sans text-xs leading-snug text-driftwood-soft">
-              {shuttle.description}
-            </div>
-          </div>
-          <Toggle
-            checked={travel.wantsPickup}
-            onChange={(v) => set("wantsPickup", v)}
-            label={shuttle.title}
-          />
-        </Card>
-      )}
     </div>
   );
 
   /**
-   * Switching to "self" clears the pickup request and any service number.
-   * Leaving a stale "yes, send a car" behind a hidden toggle would have the
-   * couple meeting a train that nobody is on.
+   * `serviceNumber` and `wantsPickup` are no longer collected anywhere, but
+   * both still exist on `Travel` and are still validated by the callable, so
+   * they are cleared here rather than left to whatever a resumed draft or a
+   * returning guest's stored reply happens to hold. Nothing reads them; this
+   * is so nothing can start.
    */
   function selectMode(mode: TransportMode) {
-    onChange(
-      mode === "self"
-        ? { ...travel, mode, serviceNumber: "", wantsPickup: false }
-        : { ...travel, mode }
-    );
+    onChange({ ...travel, mode, serviceNumber: "", wantsPickup: false });
   }
 }
 

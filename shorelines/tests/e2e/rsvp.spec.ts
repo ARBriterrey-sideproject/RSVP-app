@@ -69,8 +69,9 @@ test.describe("RSVP golden path", () => {
     await page.getByLabel("Arrival date").fill("2026-12-28");
     await page.getByLabel("Departure date").fill("2026-12-31");
     await page.getByRole("button", { name: /^Airplane\b/ }).click();
-    await page.getByLabel("Flight number").fill("6E 512");
-    await page.getByRole("switch").click();
+    // Dates and mode are the whole step now: the couple withdrew the airport
+    // pickup and asked for the flight/train number to go with it, so the
+    // service-number field and the pickup switch this used to fill are gone.
     await page.getByRole("button", { name: "Send RSVP" }).click();
 
     // --- done ------------------------------------------------------------
@@ -80,7 +81,6 @@ test.describe("RSVP golden path", () => {
     await expect(page.getByText("You’re on the list")).toBeVisible();
     await expect(page.getByText("1 guest")).toBeVisible();
     await expect(page.getByText("Airplane")).toBeVisible();
-    await expect(page.getByText("Yes, please")).toBeVisible();
 
     await expect(page.getByText("Share with your family")).toBeVisible();
     await expect(page.getByText("Your way back in")).toBeVisible();
@@ -163,6 +163,45 @@ test.describe("one number, one reply", () => {
     } finally {
       await other.close();
     }
+  });
+});
+
+test.describe("the landing remembers", () => {
+  test("a guest who has replied is told so instead of being asked again", async ({
+    page,
+  }) => {
+    // The couple's own report: they RSVPed, closed the tab, reopened the link,
+    // and were shown the invitation with "RSVP for your family" on it, with no
+    // sign the app had kept their reply. It had — `/rsvp` puts them straight on
+    // their confirmation — but the landing is a server component and had no
+    // session to read. `InviteCta` is the client island that closes that gap.
+    await page.goto("/rsvp?tier=f");
+    await verifyPhone(page, freshPhone());
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByLabel("Your full name").fill(GUEST_NAME);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Send RSVP" }).click();
+    await expect(
+      page.getByRole("heading", { name: /See you in/ })
+    ).toBeVisible({ timeout: 15_000 });
+
+    // Same session, same origin — exactly what reopening the link does.
+    await page.goto("/?tier=f");
+
+    await expect(page.getByText(`You’re on the list, ${GUEST_NAME}`)).toBeVisible(
+      { timeout: 15_000 }
+    );
+    await expect(page.getByText("saved for one guest")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "RSVP for your family" })
+    ).not.toBeAttached();
+
+    await page.getByRole("link", { name: "View or change your reply" }).click();
+    await expect(page).toHaveURL(/\/rsvp\?tier=f/);
+    await expect(
+      page.getByRole("heading", { name: /See you in/ })
+    ).toBeVisible({ timeout: 15_000 });
   });
 });
 

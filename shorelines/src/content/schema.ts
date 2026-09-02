@@ -25,6 +25,7 @@ export type Tier = "full" | "wedding_only" | "reception_only";
  * rather than weakened early for a refactor that hasn't happened.
  */
 export type EventId =
+  | "engagement"
   | "mehendi"
   | "haldi"
   | "sangeet"
@@ -68,6 +69,23 @@ export interface WeddingEvent {
   venueShort: string;
   /** Free-text address used for the Google Maps deep link. */
   mapsQuery: string;
+  /**
+   * Google Maps CID — the permanent id of a *place listing*, as a decimal
+   * string. Optional: without it `mapsUrl` falls back to a `?q=` search on
+   * `mapsQuery`, which is what shipped first.
+   *
+   * The fallback turned out to be the wrong default. A `?q=` search opens a
+   * results page, so "Get directions" landed a guest on a list to choose from
+   * rather than on the property — exactly the complaint the couple raised.
+   * A CID resolves to one listing and nothing else.
+   *
+   * It is NOT a shortened link and carries none of a shortener's risk: a
+   * `maps.app.goo.gl` URL is a redirect someone else owns and can retire,
+   * while a CID is the place's own identifier. Read it off a resolved place
+   * URL as the second hex value in the `!1s0x<FID>:0x<CID>` pair inside
+   * `data=`, converted to decimal.
+   */
+  mapsCid?: string;
   dressCode: string;
   /**
    * "Morning", "Sunset", "Night" — the landing's word for when this happens.
@@ -145,7 +163,14 @@ export interface LogisticsConfig {
    * all four languages, in one edit.
    */
   shuttle: { available: boolean; title: string; description: string };
-  stay: { description: string };
+  /**
+   * `available` mirrors the shuttle flag above, and for the same reason: the
+   * room block was a single unconditional row on the landing, so switching it
+   * off meant deleting markup rather than changing a fact. Nothing in the app
+   * books a room or models inventory, so this is a promise the app cannot
+   * keep on its own — off is a legitimate steady state, not a temporary one.
+   */
+  stay: { available: boolean; description: string };
 }
 
 /**

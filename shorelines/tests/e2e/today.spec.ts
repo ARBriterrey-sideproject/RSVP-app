@@ -45,7 +45,9 @@ test.describe("the Today tab before the wedding", () => {
       timeout: 15_000,
     });
     await expect(page.getByText("Your days with us")).toBeVisible();
-    await expect(page.getByTestId("upcoming-event")).toHaveCount(5);
+    // Six: the five ceremonies plus the engagement the couple added ahead of
+    // the Mehendi. The invitation-only private events are never in a tier.
+    await expect(page.getByTestId("upcoming-event")).toHaveCount(6);
 
     await page.getByRole("link", { name: "Reply now" }).click();
     await expect(page).toHaveURL(/\/rsvp\?tier=f/);
@@ -91,9 +93,9 @@ test.describe("the Today tab before the wedding", () => {
     await expect(page.getByText(`For ${GUEST_NAME}`)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByText("4 of 5 events")).toBeVisible();
+    await expect(page.getByText("5 of 6 events")).toBeVisible();
     await expect(page.getByText("You're coming to")).toBeVisible();
-    await expect(page.getByTestId("upcoming-event")).toHaveCount(4);
+    await expect(page.getByTestId("upcoming-event")).toHaveCount(5);
     await expect(
       page.getByRole("link", { name: "Change my reply" })
     ).toBeVisible();

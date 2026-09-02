@@ -159,24 +159,23 @@ export function dietaryCopy(t: Lookup, option: DietaryOption): LogisticsCopy {
   };
 }
 
-export interface TransportCopy extends LogisticsCopy {
-  /** Absent for "self" — there is no service number for a car. */
-  serviceLabel?: string;
-}
+export type TransportCopy = LogisticsCopy;
 
 /**
  * The descriptions name the airport and the railhead, so the translated strings
  * are sentences with `{code}` / `{station}` holes and `pick` supplies the
  * values. The names themselves stay Latin inside the translated sentence —
  * they're proper nouns a guest reads off a ticket.
+ *
+ * There was a third field here, `serviceLabel` ("Flight number" / "Train name
+ * or number"). It went with the airport pickup: the couple book their
+ * relatives' train tickets themselves, so a number nobody meets anyone off is
+ * a question with no answer behind it.
  */
 export function transportCopy(t: Lookup, mode: TransportMode): TransportCopy {
   const fallback = TRANSPORT_COPY[mode];
   return {
     title: pick(t, `transport.${mode}.label`, fallback.label),
     description: pick(t, `transport.${mode}.description`, fallback.description),
-    serviceLabel: fallback.serviceLabel
-      ? pick(t, `transport.${mode}.serviceLabel`, fallback.serviceLabel)
-      : undefined,
   };
 }

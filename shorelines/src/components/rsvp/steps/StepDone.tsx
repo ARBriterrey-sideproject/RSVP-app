@@ -140,9 +140,6 @@ export function StepDone({
                 value={transportCopy(tWedding, travel.mode).title}
               />
             )}
-            {travel.wantsPickup && (
-              <SummaryRow label={t("pickup")} value={t("pickupYes")} />
-            )}
           </>
         )}
       </div>

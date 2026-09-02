@@ -9,7 +9,6 @@ import {
   eventDayNumber,
   eventsForTier,
   rsvpDeadlineLongLabel,
-  rsvpHref,
   weddingDateRangeLabel,
   type Tier,
   type WeddingConfig,
@@ -18,6 +17,7 @@ import {
 import { DEFAULT_LOCALE, LOCALE_TAGS, isLocale } from "@/i18n/locales";
 import { eventCopy, logisticsCopy, override } from "@/i18n/weddingCopy";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { InviteCta } from "@/components/invite/InviteCta";
 import { Palm, Shell, SingleWave } from "@/components/motifs";
 import { ScallopEdge } from "@/components/rsvp/ui";
 
@@ -30,10 +30,14 @@ import { ScallopEdge } from "@/components/rsvp/ui";
  *
  * There is no `"use client"` here on purpose. Every animation on this screen —
  * the curtain, the staggered rises, the scroll reveals — is CSS, so the page
- * itself ships as static HTML. The one client island is `LanguageSwitcher` in
- * the hero, and it is deliberate: a guest who reads only Odia has to be able
- * to switch before reading anything, which no CSS-only control can do. Keep it
- * the only one — adding state to the page itself would undo the rest.
+ * itself ships as static HTML. There are exactly two client islands, and both
+ * are deliberate: `LanguageSwitcher` in the hero, because a guest who reads
+ * only Odia has to be able to switch before reading anything and no CSS-only
+ * control can do that; and `InviteCta` at the foot, because whether this guest
+ * has already replied is a question only a signed-in session can answer, and
+ * the couple were shown "RSVP for your family" on a link they had already
+ * replied to. Keep the count at two — putting state on the page itself, rather
+ * than in a leaf, would undo the arrangement for both of them.
  *
  * It is tier-aware where the mockup isn't. The mockup always lists every day
  * because it has one imagined guest; a reception-only guest shown all five
@@ -104,14 +108,10 @@ export async function InviteLanding({
         </p>
 
         <div className="mt-5 flex flex-col gap-2.5">
-          {/* The tier rides along in the href. Without it the RSVP falls back
-              to `full` and a narrow invite quietly widens itself. */}
-          <Link
-            href={rsvpHref(tier)}
-            className="rounded-pill bg-coral p-4 font-sans text-[14.5px] font-medium leading-none tracking-[0.04em] text-foam shadow-[0_8px_22px_rgba(226,138,118,0.4)] transition-colors hover:bg-coral-deep"
-          >
-            {t("ctaRsvp")}
-          </Link>
+          {/* The one client island besides the language switcher, and the only
+              part of this page that knows whether the visitor has already
+              replied — see InviteCta. Everything above it stays server-rendered. */}
+          <InviteCta tier={tier} />
         </div>
 
         <SingleWave className="mx-auto mt-8 w-[70%] text-warmgold opacity-60" />
@@ -339,8 +339,12 @@ async function DayCard({ event }: { event: WeddingEvent }) {
  * is geography, not preference: Brahmapur is 16km away and Bhubaneswar is 170,
  * so for most guests the train genuinely is the shorter way in.
  *
- * NOTE: the shuttle and room block are PLACEHOLDERS from LOGISTICS — neither is
- * arranged yet. The airport and station themselves are real.
+ * The shuttle and the room block are both switched OFF in the config at the
+ * couple's request — they don't want to offer a car or a held room to everyone
+ * who opens the link, and neither was ever arranged. Their rows read
+ * `LOGISTICS.*.available` rather than being deleted, so the wording survives
+ * for whenever one of them is genuinely laid on. The airport and the station
+ * are real and unconditional.
  */
 async function TravelAndStay() {
   const t = await getTranslations("landing");
@@ -380,7 +384,9 @@ async function TravelAndStay() {
         {LOGISTICS.shuttle.available && (
           <LogisticsRow title={shuttle.title} description={shuttle.description} />
         )}
-        <LogisticsRow title={stay.title} description={stay.description} />
+        {LOGISTICS.stay.available && (
+          <LogisticsRow title={stay.title} description={stay.description} />
+        )}
       </div>
 
       <p className="mt-3.5 text-center font-sans text-[11.5px] leading-[1.6] text-driftwood-faint">

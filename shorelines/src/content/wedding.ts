@@ -145,8 +145,8 @@ export const LOGISTICS = {
   },
   shuttle: weddingConfig.logistics.shuttle,
   stay: {
+    ...weddingConfig.logistics.stay,
     title: `Room block — ${weddingConfig.destination.region}`,
-    description: weddingConfig.logistics.stay.description,
   },
 };
 
@@ -287,8 +287,22 @@ export function eventsForTier(
   return config.events.filter((event) => event.tiers.includes(tier));
 }
 
-export function mapsUrl(event: { mapsQuery: string }): string {
-  return `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
+/**
+ * "Get directions" for one venue.
+ *
+ * Prefers the place's CID, because `?q=<address>` runs a *search*: even with a
+ * perfectly resolved address Google can answer with a results page, which is
+ * how a guest tapping "Get directions" for the resort ended up choosing from a
+ * list. `?cid=` names one listing and opens it.
+ *
+ * The `?q=` form stays as the fallback for any venue without a CID — a private
+ * event the couple types in from the dashboard has an address and nothing
+ * else, and a search page is still far better than no link.
+ */
+export function mapsUrl(event: { mapsQuery: string; mapsCid?: string }): string {
+  return event.mapsCid
+    ? `https://maps.google.com/?cid=${encodeURIComponent(event.mapsCid)}`
+    : `https://maps.google.com/?q=${encodeURIComponent(event.mapsQuery)}`;
 }
 
 /**
@@ -443,9 +457,13 @@ export const DIETARY_COPY: Record<
 /**
  * How a guest is getting to the wedding. Stable ids; labels are translated.
  *
- * "self" covers driving, a hired car, a bus — anything the couple doesn't need
- * to meet. It exists so that a guest who needs no pickup can say so in one tap
- * instead of leaving the step blank and looking like an unanswered question.
+ * "self" covers driving, a hired car, a bus. It exists so that a guest with
+ * nothing to declare can say so in one tap instead of leaving the step blank
+ * and looking like an unanswered question.
+ *
+ * The mode is now all this step collects. The flight/train number field went
+ * with the pickup: the couple books their relatives' train tickets themselves,
+ * and with no car being sent there is nothing on the other side to meet.
  */
 export const TRANSPORT_MODES = ["airplane", "train", "self"] as const;
 
@@ -464,21 +482,19 @@ export function isTransportMode(value: unknown): value is TransportMode {
  */
 export const TRANSPORT_COPY: Record<
   TransportMode,
-  { label: string; description: string; serviceLabel?: string }
+  { label: string; description: string }
 > = {
   airplane: {
     label: "Airplane",
     description: `Into ${LOGISTICS.airport.code} — ${LOGISTICS.airport.note.toLowerCase()}`,
-    serviceLabel: "Flight number",
   },
   train: {
     label: "Train",
     description: `To ${LOGISTICS.station.name} — the closest railhead`,
-    serviceLabel: "Train name or number",
   },
   self: {
     label: "Driving myself",
-    description: "By car or bus — no pickup needed",
+    description: "By car or bus",
   },
 };
 

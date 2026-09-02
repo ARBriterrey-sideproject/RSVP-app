@@ -7,15 +7,22 @@ import { leadName, listRsvps, type RsvpRecord } from "@/lib/firebase/rsvps";
 import { PanelNote } from "./panelKit";
 
 /**
- * WHO NEEDS PICKING UP, AND WHEN.
+ * WHO ARRIVES WHEN, AND HOW.
  *
- * Sorted by arrival date so the coordinator can read this the way a shuttle
- * schedule reads — earliest arrivals first, no-arrival-date replies last.
+ * Sorted by arrival date so the coordinator can read it the way an arrivals
+ * board reads — earliest first, no-arrival-date replies last.
+ *
+ * There used to be a "Wants pickup" filter, a "Needs pickup" badge and a
+ * flight/train number row. The couple withdrew the airport pickup and asked
+ * for the service number to go with it, so the RSVP form no longer collects
+ * either — see `StepTravel`. Both fields survive on the record (the callable
+ * still accepts them, and a handful of trial replies still carry a value), but
+ * showing a staff member a pickup request that nothing is going to honour is
+ * worse than not showing it, so this panel deliberately doesn't read them.
  */
 
-const MODE_FILTERS: { value: TransportMode | "all" | "pickup"; label: string }[] = [
+const MODE_FILTERS: { value: TransportMode | "all"; label: string }[] = [
   { value: "all", label: "Everyone" },
-  { value: "pickup", label: "Wants pickup" },
   { value: "airplane", label: "Flying" },
   { value: "train", label: "Train" },
   { value: "self", label: "Driving" },
@@ -25,7 +32,7 @@ export function TravelPanel() {
   const [records, setRecords] = useState<RsvpRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<TransportMode | "all" | "pickup">("all");
+  const [filter, setFilter] = useState<TransportMode | "all">("all");
 
   useEffect(() => {
     void (async () => {
@@ -54,9 +61,7 @@ export function TravelPanel() {
     const list =
       filter === "all"
         ? withTravel
-        : filter === "pickup"
-          ? withTravel.filter((record) => record.travel.wantsPickup)
-          : withTravel.filter((record) => record.travel.mode === filter);
+        : withTravel.filter((record) => record.travel.mode === filter);
 
     return [...list].sort((a, b) => {
       const dateA = a.travel.arrivalOn ?? "";
@@ -67,11 +72,6 @@ export function TravelPanel() {
       return dateA.localeCompare(dateB);
     });
   }, [withTravel, filter]);
-
-  const pickupCount = useMemo(
-    () => withTravel.filter((record) => record.travel.wantsPickup).length,
-    [withTravel]
-  );
 
   if (loading) {
     return (
@@ -84,9 +84,7 @@ export function TravelPanel() {
   return (
     <div className="mt-3">
       <PanelNote>
-        {pickupCount > 0
-          ? `${pickupCount} ${pickupCount === 1 ? "party has" : "parties have"} asked for a pickup.`
-          : "Arrival and departure details from every reply that gave one."}
+        Arrival and departure details from every reply that gave one.
       </PanelNote>
 
       {error ? (
@@ -122,16 +120,9 @@ export function TravelPanel() {
             key={record.ownerUid}
             className="rounded-card bg-white p-3.5 ring-1 ring-hairline/50"
           >
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-sans text-[14px] font-medium text-driftwood">
-                {leadName(record)}
-              </p>
-              {record.travel.wantsPickup ? (
-                <span className="rounded-pill bg-palm/15 px-2 py-0.5 font-sans text-[10px] font-medium text-palm">
-                  Needs pickup
-                </span>
-              ) : null}
-            </div>
+            <p className="font-sans text-[14px] font-medium text-driftwood">
+              {leadName(record)}
+            </p>
 
             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-sans text-[12px] text-driftwood-soft">
               <span>Arriving</span>
@@ -146,18 +137,6 @@ export function TravelPanel() {
               <span className="text-right text-driftwood">
                 {record.travel.mode ? TRANSPORT_COPY[record.travel.mode].label : "Not given"}
               </span>
-              {record.travel.serviceNumber ? (
-                <>
-                  <span>
-                    {record.travel.mode
-                      ? TRANSPORT_COPY[record.travel.mode].serviceLabel ?? "Service"
-                      : "Service"}
-                  </span>
-                  <span className="text-right text-driftwood">
-                    {record.travel.serviceNumber}
-                  </span>
-                </>
-              ) : null}
             </div>
 
             {record.submittedByPhone || record.verifiedPhone ? (
@@ -185,6 +164,6 @@ export function TravelPanel() {
 }
 
 function hasTravelInfo(record: RsvpRecord): boolean {
-  const { arrivalOn, departureOn, mode, wantsPickup } = record.travel;
-  return Boolean(arrivalOn || departureOn || mode || wantsPickup);
+  const { arrivalOn, departureOn, mode } = record.travel;
+  return Boolean(arrivalOn || departureOn || mode);
 }
