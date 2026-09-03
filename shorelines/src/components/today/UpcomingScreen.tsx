@@ -137,14 +137,16 @@ export function UpcomingScreen({
         className="flex-1 overflow-y-auto"
         style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
       >
-        {/* Full-bleed the same way TodayScreen's hero is — see the comment there. */}
-        <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] px-6 pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
+        {/* Full-bleed the same way TodayScreen's hero is, including the centred
+            `max-w-content` inner box — see the comment there for why the
+            content can't be laid out against the full-width header. */}
+        <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
           <div className="animate-tide pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_25%_25%,rgba(226,138,118,0.45),transparent_70%),radial-gradient(45%_45%_at_85%_60%,rgba(255,236,200,0.55),transparent_70%)]" />
-          <Palm
-            className="animate-sway-b pointer-events-none absolute -right-8 -top-5 w-[170px] opacity-[0.28]"
-            short
-          />
-          <div className="relative">
+          <div className="relative mx-auto w-full max-w-content px-6">
+            <Palm
+              className="animate-sway-b pointer-events-none absolute -right-2 -top-16 w-[170px] opacity-[0.28]"
+              short
+            />
             <p className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.34em] text-foam/75">
               {guestName ? t("eyebrowWithName", { name: guestName }) : t("eyebrow")}
             </p>

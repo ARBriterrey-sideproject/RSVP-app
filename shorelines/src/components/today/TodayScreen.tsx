@@ -528,14 +528,24 @@ export function TodayScreen({
       >
         {/* Breaks out of AppShell's max-w-content wrapper to stay full-bleed:
             `left-1/2 -translate-x-1/2 w-screen` recenters on the viewport
-            regardless of the capped parent's own width/position. */}
-        <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] px-6 pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
+            regardless of the capped parent's own width/position.
+
+            The text and the palm sit in their own `max-w-content` box rather
+            than in the header directly. The scroll container above is
+            `overflow-y-auto`, which computes `overflow-x` to `auto` too, so on
+            a viewport wider than the content column the breakout is clipped
+            back to that column — content laid out against the full-width
+            header would start off-screen left and lose the date, the greeting
+            and the summary (white-on-sand, so silently). Centring it here
+            keeps it inside the visible band on desktop, and still lines up if
+            the clip ever goes away. */}
+        <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
           <div className="animate-tide pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_25%_25%,rgba(226,138,118,0.45),transparent_70%),radial-gradient(45%_45%_at_85%_60%,rgba(255,236,200,0.55),transparent_70%)]" />
-          <Palm
-            className="animate-sway-b pointer-events-none absolute -right-8 -top-5 w-[170px] opacity-[0.28]"
-            short
-          />
-          <div className="relative">
+          <div className="relative mx-auto w-full max-w-content px-6">
+            <Palm
+              className="animate-sway-b pointer-events-none absolute -right-2 -top-16 w-[170px] opacity-[0.28]"
+              short
+            />
             <p className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.34em] text-foam/75">
               {eyebrowDate}
             </p>
