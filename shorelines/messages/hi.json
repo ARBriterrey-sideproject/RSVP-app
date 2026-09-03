@@ -17,6 +17,7 @@
       "region": "गोपालपुर"
     },
     "events": {
+      "engagement": { "name": "सगाई और अंगूठी की रस्म", "daypart": "सूर्यास्त" },
       "mehendi": { "name": "मेहंदी", "daypart": "शाम" },
       "haldi": { "name": "हल्दी", "daypart": "सुबह" },
       "sangeet": { "name": "संगीत", "daypart": "शाम" },

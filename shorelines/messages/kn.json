@@ -17,6 +17,10 @@
       "region": "ಗೋಪಾಲಪುರ"
     },
     "events": {
+      "engagement": {
+        "name": "ನಿಶ್ಚಿತಾರ್ಥ ಮತ್ತು ಉಂಗುರ ವಿನಿಮಯ",
+        "daypart": "ಸೂರ್ಯಾಸ್ತ"
+      },
       "mehendi": { "name": "ಮೆಹೆಂದಿ", "daypart": "ಸಂಜೆ" },
       "haldi": { "name": "ಅರಿಶಿನ", "daypart": "ಬೆಳಗ್ಗೆ" },
       "sangeet": { "name": "ಸಂಗೀತ", "daypart": "ಸಂಜೆ" },

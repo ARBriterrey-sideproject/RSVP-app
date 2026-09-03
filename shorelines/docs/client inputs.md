@@ -45,7 +45,7 @@ I have one query:
 
 # v2
 
-3.⁠ ⁠Inform us by October 1st the main page says december 1st. 
+3.⁠ ⁠Inform us by October 1st the main page says december 1st. if any new invites come post october 1st leave the link open the couple will handle them individually. 
 
 9.⁠ ⁠Now the website shows that I have already RSVPed. It shows at the end of this page. The client has a question:
 I think once people have RSVPed, it would be better to have this Schedule/Today page as the homepage the next time they visit the website, not the rsvp landing  is it possible to have this?
