@@ -17,10 +17,12 @@ import {
   eventsForTier,
   isTier,
   normaliseDietary,
+  tierCode,
   type DietaryOption,
   type Tier,
   type WeddingConfig,
 } from "@/content/wedding";
+import { markReplied } from "@/lib/guest/replied";
 import {
   emptyTravel,
   hydrateParty,
@@ -253,6 +255,8 @@ export function RsvpFlow({
 
       if (typeof stored.notes === "string") setNotes(stored.notes);
       setTravel(hydrateTravel(stored.travel));
+      // See `markReplied` — this is what makes `/` send them to Today next time.
+      markReplied(tierCode(nextTier));
       setBusy(false);
       setScreen((current) =>
         current === "loading" || current === "phone" ? "done" : current
@@ -296,6 +300,9 @@ export function RsvpFlow({
       if (response.data?.shareCode) setShareCode(response.data.shareCode);
       if (response.data?.recoveryCode)
         setRecoveryCode(response.data.recoveryCode);
+      // `effectiveTier` and not the link's: the server has just fixed the
+      // stored tier to this, and it's the one `/` should redirect on.
+      markReplied(tierCode(effectiveTier));
       setScreen("done");
     } catch (err) {
       // The Firebase message is English and untranslatable, but it's the only

@@ -186,8 +186,19 @@ test.describe("the landing remembers", () => {
       page.getByRole("heading", { name: /See you in/ })
     ).toBeVisible({ timeout: 15_000 });
 
-    // Same session, same origin — exactly what reopening the link does.
+    // Same session, same origin — exactly what reopening the link does. The
+    // couple then asked for more than a card: a guest who has replied should
+    // land on Today, not on the invitation. `/` redirects them there off the
+    // `shorelines_replied` cookie, server-side, so there's no flash of the
+    // invitation first.
     await page.goto("/?tier=f");
+    await expect(page).toHaveURL(/\/today\?tier=f/);
+    await expect(page.getByText("Your reply")).toBeVisible({ timeout: 15_000 });
+
+    // `?invite=1` is the one-visit escape hatch — the link UpcomingScreen
+    // renders, and the only way back to the invitation once they've replied.
+    await page.getByRole("link", { name: "See the invitation" }).click();
+    await expect(page).toHaveURL(/\/\?tier=f&invite=1/);
 
     await expect(page.getByText(`You’re on the list, ${GUEST_NAME}`)).toBeVisible(
       { timeout: 15_000 }

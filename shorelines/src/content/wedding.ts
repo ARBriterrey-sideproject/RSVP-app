@@ -253,9 +253,14 @@ const TIER_CODES = {
   r: "reception_only",
 } as const satisfies Record<string, Tier>;
 
+/** The letter alias itself — `f` | `w` | `r`, derived so it can't drift. */
+export type TierCode = keyof typeof TIER_CODES;
+
 /** The code to put in a shareable link. Used by the dashboard's copy flow. */
-export function tierCode(tier: Tier): string {
-  const entry = Object.entries(TIER_CODES).find(([, t]) => t === tier);
+export function tierCode(tier: Tier): TierCode {
+  const entry = (Object.entries(TIER_CODES) as [TierCode, Tier][]).find(
+    ([, t]) => t === tier
+  );
   return entry?.[0] ?? "f";
 }
 

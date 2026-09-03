@@ -41,3 +41,15 @@ I have one query:
 
 
 10.⁠ ⁠Should me and Amruta create a login ID with email and password for the first time, and then you give us access?
+
+
+# v2
+
+3.⁠ ⁠Inform us by October 1st the main page says december 1st. 
+
+9.⁠ ⁠Now the website shows that I have already RSVPed. It shows at the end of this page. The client has a question:
+I think once people have RSVPed, it would be better to have this Schedule/Today page as the homepage the next time they visit the website, not the rsvp landing  is it possible to have this?
+
+10 the clients have created account and requested access lets give them that access. 
+
+11. error post filling form : perEventAttendance contains unknown event "Engagement" this might be because the event was added later.

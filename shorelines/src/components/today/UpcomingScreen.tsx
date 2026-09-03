@@ -262,8 +262,19 @@ export function UpcomingScreen({
           </Link>
         </section>
 
+        {/* The way back to the invitation. `/` now redirects a guest who has
+            replied straight here, so without this link the invitation itself —
+            the hero, the days, travel and stay — would be unreachable for
+            exactly the guests who were most pleased to receive it. `invite=1`
+            is the flag that suppresses that redirect for one visit. */}
         <div className="flex flex-col items-center gap-2 px-6 pb-6 pt-7 text-center">
-          <p className="font-display text-[19px] leading-none text-driftwood-faint">
+          <Link
+            href={`/?tier=${tierCode(effectiveTier)}&invite=1`}
+            className="font-sans text-[11.5px] font-medium text-coral-ink"
+          >
+            {t("viewInvitation")}
+          </Link>
+          <p className="mt-1 font-display text-[19px] leading-none text-driftwood-faint">
             {t("signOff")}
           </p>
         </div>

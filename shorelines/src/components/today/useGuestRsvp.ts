@@ -23,7 +23,8 @@ import { useEffect, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { getFirebase } from "@/lib/firebase/client";
-import { isTier, type Tier } from "@/content/wedding";
+import { isTier, tierCode, type Tier } from "@/content/wedding";
+import { clearReplied, markReplied } from "@/lib/guest/replied";
 
 export type GuestRsvp = {
   storedTier: Tier | null;
@@ -54,11 +55,13 @@ export function useGuestRsvp(): GuestRsvp {
       // UpcomingScreen's "you haven't replied yet" card from exactly the guest
       // it's for, since nothing on that screen signs in.
       if (!user) {
+        clearReplied();
         setState({ ...EMPTY, loaded: true });
         return;
       }
       const snap = await getDoc(doc(db, "rsvps", user.uid));
       if (!snap.exists()) {
+        clearReplied();
         setState({ ...EMPTY, loaded: true });
         return;
       }
@@ -68,14 +71,24 @@ export function useGuestRsvp(): GuestRsvp {
         Array.isArray(party) && typeof party[0]?.name === "string"
           ? party[0].name.trim()
           : "";
+      const storedTier = isTier(stored.tier) ? stored.tier : null;
+      const attendance =
+        stored.perEventAttendance && typeof stored.perEventAttendance === "object"
+          ? (stored.perEventAttendance as Record<string, boolean>)
+          : null;
+
+      // The breadcrumb `/` reads on the *next* visit to decide whether to send
+      // this guest to Today instead of the invitation. Written here rather than
+      // only on submission so a guest who replied before this shipped picks it
+      // up too, and cleared above so a deleted reply un-does it.
+      if (attendance) markReplied(tierCode(storedTier ?? "full"));
+      else clearReplied();
+
       setState({
-        storedTier: isTier(stored.tier) ? stored.tier : null,
+        storedTier,
         guestName: firstName || null,
         partySize: Array.isArray(party) ? party.length : null,
-        perEventAttendance:
-          stored.perEventAttendance && typeof stored.perEventAttendance === "object"
-            ? (stored.perEventAttendance as Record<string, boolean>)
-            : null,
+        perEventAttendance: attendance,
         loaded: true,
       });
     });
