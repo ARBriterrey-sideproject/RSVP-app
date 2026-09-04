@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
@@ -1447,16 +1447,36 @@ export const listEventPhotos = onCall(
       "eventId is not a recognised event"
     );
 
-    const [files] = await getStorage()
-      .bucket()
-      .getFiles({ prefix: `photos/${eventId}/` });
+    const bucket = getStorage().bucket();
+    const [files] = await bucket.getFiles({ prefix: `photos/${eventId}/` });
+
+    // Firebase download-token URLs, not getSignedUrl(): signing needs a
+    // service-account private key or IAM signBlob permission on the
+    // function's own runtime service account, neither of which exists
+    // against the Storage emulator and neither of which Cloud Functions
+    // Gen2 grants by default — getSignedUrl() throws SigningError in both
+    // places. A download token is plain Storage object metadata, served by
+    // the same /v0/b/.../o/... REST endpoint the client SDK's
+    // getDownloadURL() uses, so it needs no signing and works identically
+    // against the emulator and in production.
+    const emulatorHost = process.env.STORAGE_EMULATOR_HOST;
+    const base = emulatorHost
+      ? `${emulatorHost.replace(/\/$/, "")}/v0`
+      : "https://firebasestorage.googleapis.com/v0";
 
     const photos = await Promise.all(
       files.map(async (file) => {
-        const [url] = await file.getSignedUrl({
-          action: "read",
-          expires: Date.now() + 60 * 60 * 1000,
-        });
+        const [metadata] = await file.getMetadata();
+        let token = metadata.metadata?.firebaseStorageDownloadTokens
+          ?.toString()
+          .split(",")[0];
+        if (!token) {
+          token = randomUUID();
+          await file.setMetadata({
+            metadata: { firebaseStorageDownloadTokens: token },
+          });
+        }
+        const url = `${base}/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(file.name)}?alt=media&token=${token}`;
         return {
           fullPath: file.name,
           name: file.name.split("/").pop() ?? file.name,
