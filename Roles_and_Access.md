@@ -40,7 +40,7 @@ Ranking rather than a permission matrix means every rule is a single `>=` compar
 
 ## Capabilities
 
-Defined in `CAPABILITIES` in [roles.ts](shorelines/src/lib/auth/roles.ts). UI asks `can(role, "grantSpeakeasy")`; it never compares role names itself, so moving a capability between roles is a one-line edit in that file.
+Defined in `CAPABILITIES` in [roles.ts](shorelines/src/lib/auth/roles.ts). UI asks `can(role, "managePrivateEvents")`; it never compares role names itself, so moving a capability between roles is a one-line edit in that file.
 
 | Capability | Min rank | Coordinator | Couple | Admin | Dashboard panel |
 |---|---|:---:|:---:|:---:|---|
@@ -49,7 +49,7 @@ Defined in `CAPABILITIES` in [roles.ts](shorelines/src/lib/auth/roles.ts). UI as
 | `copyInviteLinks` | coordinator | ✅ | ✅ | ✅ | Invite links |
 | `editEmergencyContacts` | coordinator | ✅ | ✅ | ✅ | Emergency contacts |
 | `viewMemories` | couple | ❌ | ✅ | ✅ | Messages to you |
-| `grantSpeakeasy` | couple | ❌ | ✅ | ✅ | The speakeasy |
+| `managePrivateEvents` | couple | ❌ | ✅ | ✅ | Private events |
 | `editSchedule` | couple | ❌ | ✅ | ✅ | Schedule |
 | `flagResponse` | couple | ❌ | ✅ | ✅ | *(within Replies)* |
 | `deleteResponse` | couple | ❌ | ✅ | ✅ | *(within Replies)* |
@@ -230,7 +230,10 @@ The `{ownerUid}` path segment is what stops guests overwriting each other's uplo
 | Callable | Who may call it | Notes |
 |---|---|---|
 | `submitRsvp` | any signed-in user | Writes only `rsvps/{request.auth.uid}`. Enforces the party-size cap, tier immutability, string limits, and strips invitation-only events a guest wasn't flagged for |
-| `setSpeakeasyInvite` | rank ≥ `couple` | A coordinator gets `permission-denied`. Revoking also deletes the stored acceptance |
+| `savePrivateEvent` | rank ≥ `couple` | Creates or edits a `privateEvents/{id}` document. Caps the collection at `MAX_PRIVATE_EVENTS` (20) and the note at 400 chars. A coordinator gets `permission-denied` |
+| `deletePrivateEvent` | rank ≥ `couple` | Deletes the event **and** strips its id off every guest's `invitedPrivateEventIds`, so a re-created id can't inherit a guest list nobody chose. Returns the number of invites revoked |
+| `setPrivateEventInvite` | rank ≥ `couple` | Adds or removes one `ownerUid` from a private event, by writing that guest's own `invitedPrivateEventIds` array |
+| `getMyPrivateEvents` | any signed-in user | The guest side. Reads the invite ids off the **caller's own** RSVP document with the Admin SDK and returns those events. No tier, URL parameter or client flag is in the path; the rules deny guests any read of `privateEvents` |
 | `flagResponse` | rank ≥ `couple` | Sets `rsvps/{ownerUid}.flagged`. Backs the flag/unflag action inside the Replies panel |
 | `deleteResponse` | rank ≥ `couple` | Batch-deletes `rsvps/{ownerUid}` and its mirrored `invites/{shareCode}`, if any. No undo — the guest is never notified |
 | `syncRole` | any signed-in user | Requires a verified email. Grants only what the roster says, for the caller's own address |
@@ -256,7 +259,7 @@ Run against the emulator suite. The forged-token rows use an unsigned `alg:none`
 | Admin signs in | 8 panels | ✅ 8 of 8 |
 | Coordinator signs in | 4 panels | ✅ 4 of 8 |
 | Rostered address, email unverified | no role | ✅ `failed-precondition` |
-| Coordinator calls `setSpeakeasyInvite` | denied | ✅ `PERMISSION_DENIED` |
+| Coordinator calls `setSpeakeasyInvite` (now `setPrivateEventInvite`) | denied | ✅ `PERMISSION_DENIED` |
 | Real coordinator, token forged to `admin` | overwritten | ✅ → `coordinator` |
 | Off-roster account, token forged to `admin` | cleared | ✅ → `{}` |
 | Coordinator reads `rsvps` / `memories` | 200 / 403 | ✅ |

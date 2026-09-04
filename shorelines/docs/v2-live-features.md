@@ -1,5 +1,13 @@
 # v2 build: chat, memories, polls, song requests, photo albums
 
+> **Superseded — kept as a record of the build, not as current status.** All five
+> features shipped, frontend included, and the dashboard is now twelve panels.
+> The "Frontend: not started" list below was true when written and is wrong now;
+> so is the panel inventory in it (the Speakeasy panel it names was replaced by
+> `PrivateEventsPanel.tsx` when the speakeasy was generalized into
+> couple-authored private events). `CLAUDE.md` and `Roles_and_Access.md` are the
+> current references.
+
 Full plan: `/Users/andhan/.claude/plans/mighty-doodling-pillow.md` (read that for design rationale — this file is just status + pointers).
 
 ## Status

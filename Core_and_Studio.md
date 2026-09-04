@@ -91,11 +91,11 @@ theme tokens, the party cap, the RSVP flow's steps. This is `WeddingConfig` plus
 the theme block.
 
 **Runtime data** — the couple edits it from the dashboard, no rebuild. Event
-times, venue names, dress codes, emergency contacts, the speakeasy flag per
-guest. Today most of these still live in the config literal, which is fine while
-nothing is launched; before launch they move to Firestore with the literal as
-the seed and the offline fallback. `wedding.config.ts` already says so in its
-header.
+times, venue names, dress codes, emergency contacts, and the private events the
+couple authors along with who is invited to each. Today most of these still live
+in the config literal, which is fine while nothing is launched; before launch
+they move to Firestore with the literal as the seed and the offline fallback.
+`wedding.config.ts` already says so in its header.
 
 **Guest data** — RSVPs, memories, photos. Never config, never touched by the
 studio.
@@ -224,7 +224,7 @@ model you have to re-prompt. Write them as scripts.
 pipeline — the part that's currently "the couple fills in a form", which is the
 worst part of the plan. A `WeddingConfig` has around sixty fields. Nobody fills
 in sixty fields well, and the ones they fill in badly are the ones you can't
-validate: dress codes, the tone of the lede, what to call the speakeasy.
+validate: dress codes, the tone of the lede, what to call each event.
 
 So the honest shape is: **a conversation at the front, a pipeline behind it.**
 
