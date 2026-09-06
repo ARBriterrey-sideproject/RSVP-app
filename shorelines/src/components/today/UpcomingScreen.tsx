@@ -134,12 +134,14 @@ export function UpcomingScreen({
   return (
     <AppShell tab="today" tier={effectiveTier} live={false}>
       <div
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overflow-x-hidden"
         style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
       >
         {/* Full-bleed the same way TodayScreen's hero is, including the centred
-            `max-w-content` inner box — see the comment there for why the
-            content can't be laid out against the full-width header. */}
+            `max-w-content` inner box, and the same `overflow-x-hidden` pairing
+            — without it this pane picks up a genuine (if invisible-looking)
+            horizontal scrollbar above the 672px content column; see the
+            comment on TodayScreen's scroll container for the measurements. */}
         <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
           <div className="animate-tide pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_25%_25%,rgba(226,138,118,0.45),transparent_70%),radial-gradient(45%_45%_at_85%_60%,rgba(255,236,200,0.55),transparent_70%)]" />
           <div className="relative mx-auto w-full max-w-content px-6">

@@ -1,12 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { CalendarIcon } from "lucide-react";
 import {
   TRANSPORT_MODES,
   WEDDING_DATES,
   type TransportMode,
 } from "@/content/wedding";
 import { transportCopy } from "@/i18n/weddingCopy";
+import { useLocaleTag } from "@/i18n/useLocaleTag";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { Travel } from "../types";
 import { Card, Eyebrow, RadioDot, StepIntro, StepTitle } from "../ui";
 
@@ -104,8 +113,12 @@ export function StepTravel({
 
 /**
  * Date only, not datetime. Bounded to the fortnight around the wedding so the
- * native picker opens on the right month instead of today, and a mistyped year
+ * calendar opens on the right month instead of today, and a mistyped year
  * can't sail through.
+ *
+ * A popover rather than an inline grid so two of these still fit side by side
+ * on a phone-width step — an always-open month grid at this width would force
+ * the pair to stack, which the "Getting there" layout doesn't have room for.
  */
 function DateCard({
   label,
@@ -120,18 +133,63 @@ function DateCard({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const tag = useLocaleTag();
+  const [open, setOpen] = useState(false);
+
+  const selected = value ? isoToDate(value) : undefined;
+
   return (
     <Card className="min-w-0 flex-1 px-4 py-3.5">
       <Eyebrow>{label}</Eyebrow>
-      <input
-        type="date"
-        value={value}
-        min={TRAVEL_WINDOW.from}
-        max={TRAVEL_WINDOW.to}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={fieldLabel}
-        className="mt-2 w-full bg-transparent font-sans text-[15px] leading-snug text-driftwood outline-none [color-scheme:light]"
-      />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          aria-label={fieldLabel}
+          className="mt-2 flex w-full items-center gap-1.5 bg-transparent text-left font-sans text-[15px] leading-snug text-driftwood outline-none"
+        >
+          <CalendarIcon
+            className="size-[15px] shrink-0 text-coral-ink"
+            aria-hidden="true"
+          />
+          <span
+            className={
+              selected ? "text-driftwood" : "text-driftwood-faint truncate"
+            }
+          >
+            {selected
+              ? new Intl.DateTimeFormat(tag, {
+                  day: "numeric",
+                  month: "short",
+                }).format(selected)
+              : fieldLabel}
+          </span>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-auto p-2">
+          <Calendar
+            mode="single"
+            selected={selected}
+            defaultMonth={selected ?? isoToDate(TRAVEL_WINDOW.from)}
+            onSelect={(date) => {
+              onChange(date ? dateToIso(date) : "");
+              setOpen(false);
+            }}
+            disabled={[
+              { before: isoToDate(TRAVEL_WINDOW.from) },
+              { after: isoToDate(TRAVEL_WINDOW.to) },
+            ]}
+            formatters={{
+              formatCaption: (date) =>
+                new Intl.DateTimeFormat(tag, {
+                  month: "long",
+                  year: "numeric",
+                }).format(date),
+              formatWeekdayName: (date) =>
+                new Intl.DateTimeFormat(tag, { weekday: "narrow" }).format(
+                  date
+                ),
+            }}
+          />
+        </PopoverContent>
+      </Popover>
     </Card>
   );
 }
@@ -146,4 +204,23 @@ function shiftDays(isoDate: string, days: number): string {
   const d = new Date(`${isoDate}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * `YYYY-MM-DD` <-> a local calendar `Date`, matching what react-day-picker
+ * itself works with. Deliberately not a UTC round-trip (`new Date(iso)` or
+ * `toISOString()`): those shift the calendar day depending on the browser's
+ * offset from UTC, which is exactly the class of bug this app's date helpers
+ * (`instant.ts`) already guard against elsewhere.
+ */
+function isoToDate(iso: string): Date {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function dateToIso(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }

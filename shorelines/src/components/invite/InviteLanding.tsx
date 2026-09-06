@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import {
@@ -8,6 +9,7 @@ import {
   WEDDING_DATES,
   eventDayNumber,
   eventsForTier,
+  mapsUrl,
   rsvpDeadlineLongLabel,
   weddingDateRangeLabel,
   type Tier,
@@ -18,7 +20,7 @@ import { DEFAULT_LOCALE, LOCALE_TAGS, isLocale } from "@/i18n/locales";
 import { eventCopy, logisticsCopy, override } from "@/i18n/weddingCopy";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { InviteCta } from "@/components/invite/InviteCta";
-import { Palm, Shell, SingleWave } from "@/components/motifs";
+import { Palm, SingleWave } from "@/components/motifs";
 import { ScallopEdge } from "@/components/rsvp/ui";
 
 /**
@@ -59,7 +61,19 @@ export async function InviteLanding({
   const events = eventsForTier(tier, config);
   const t = await getTranslations("landing");
   const tCommon = await getTranslations("common");
+  const tWedding = await getTranslations("wedding");
   const tag = await localeTag();
+
+  // Gopalpur Resort hosts every event but the wedding ceremony itself
+  // (Engagement, Mehendi, Haldi, Sangeet, Reception all share the one
+  // mapsQuery/mapsCid) — read off `config.events` directly rather than the
+  // tier-filtered `events` above, since a wedding_only guest's only eligible
+  // event is the Panthanivas ceremony and would otherwise lose this link
+  // entirely even though the resort is still where their weekend is based.
+  const resortEvent = config.events.find((event) => event.id === "mehendi");
+  const resortName = resortEvent
+    ? eventCopy(tWedding, resortEvent).venueShort
+    : null;
 
   return (
     <main className="relative w-full overflow-x-hidden bg-sand">
@@ -96,7 +110,7 @@ export async function InviteLanding({
         </ul>
       </section>
 
-      <TravelAndStay />
+      <TravelAndStay resortEvent={resortEvent} resortName={resortName} />
       <PhotoBand />
 
       <section className="scroll-lift mx-auto w-full max-w-content px-[30px] pt-[34px] pb-[46px] text-center">
@@ -345,9 +359,21 @@ async function DayCard({ event }: { event: WeddingEvent }) {
  * `LOGISTICS.*.available` rather than being deleted, so the wording survives
  * for whenever one of them is genuinely laid on. The airport and the station
  * are real and unconditional.
+ *
+ * `resortEvent`/`resortName` are computed once by the caller (see the comment
+ * on that lookup in `InviteLanding`) and passed down rather than re-derived
+ * here, so there is only ever one place that decides which event stands in
+ * for "the resort".
  */
-async function TravelAndStay() {
+async function TravelAndStay({
+  resortEvent,
+  resortName,
+}: {
+  resortEvent: WeddingEvent | undefined;
+  resortName: string | null;
+}) {
   const t = await getTranslations("landing");
+  const tToday = await getTranslations("today");
   const tWedding = await getTranslations("wedding");
   const shuttle = logisticsCopy(tWedding, "shuttle", LOGISTICS.shuttle);
   const stay = logisticsCopy(tWedding, "stay", LOGISTICS.stay);
@@ -357,6 +383,16 @@ async function TravelAndStay() {
       <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
         {t("travelHeading")}
       </h2>
+
+      {resortEvent && resortName && (
+        <div className="mb-2.5">
+          <LocationCard
+            href={mapsUrl(resortEvent)}
+            name={resortName}
+            directionsLabel={tToday("getDirections")}
+          />
+        </div>
+      )}
 
       <div className="flex flex-col gap-2.5">
         {/* Station and airport *names* stay Latin on purpose — a guest reads
@@ -415,20 +451,77 @@ function LogisticsRow({
   );
 }
 
-/** The scalloped photo band. A placeholder until the couple supply an image. */
+/**
+ * The resort card at the top of Travel & stay — a photo standing in for the
+ * plain-text "Get directions" line that used to sit under the days list.
+ * The image is the couple's own listing photo, not a stock shot: see
+ * `public/images/resort.jpg`.
+ */
+function LocationCard({
+  href,
+  name,
+  directionsLabel,
+}: {
+  href: string;
+  name: string;
+  directionsLabel: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="group block overflow-hidden rounded-card bg-card"
+    >
+      <div className="relative w-full" style={{ height: 140 }}>
+        <Image
+          src="/images/resort.jpg"
+          alt={name}
+          fill
+          sizes="(min-width: 480px) 420px, 100vw"
+          className="object-cover"
+        />
+      </div>
+      <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+        <p className="font-sans text-[14.5px] font-medium leading-tight text-driftwood">
+          {name}
+        </p>
+        <span className="flex-none font-sans text-xs font-medium text-deeptide underline underline-offset-2 group-hover:no-underline">
+          {directionsLabel}
+        </span>
+      </div>
+    </a>
+  );
+}
+
+/**
+ * The scalloped photo band — the couple's own photo. Same lakeside source
+ * (`images/RSVP_profile.jpeg`, saved as `couple-desktop.jpg`) at both
+ * breakpoints, just a different `objectPosition` crop window: the wide
+ * scenery reads well even in the narrow mobile band, so a separate tighter
+ * mobile crop isn't needed here.
+ */
 async function PhotoBand() {
   const t = await getTranslations("landing");
 
   return (
-    <div className="scroll-lift relative mt-[30px] h-[230px] bg-[linear-gradient(140deg,var(--color-dune),var(--color-dune-deep))]">
-      <div className="animate-tide absolute inset-0 bg-[radial-gradient(50%_60%_at_30%_40%,rgba(111,169,166,0.45),transparent_70%),radial-gradient(50%_50%_at_75%_60%,rgba(226,138,118,0.4),transparent_70%)] blur-[4px]" />
-
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
-        <Shell className="w-11 text-bark opacity-55" />
-        <span className="font-sans text-[11px] uppercase leading-none tracking-[0.24em] text-bark">
-          {t("photoPlaceholder")}
-        </span>
-      </div>
+    <div className="scroll-lift relative mt-[30px]" style={{ height: 380 }}>
+      <Image
+        src="/images/couple-desktop.jpg"
+        alt={t("photoPlaceholder")}
+        fill
+        sizes="100vw"
+        className="block object-cover md:hidden"
+        style={{ objectPosition: "50% 55%" }}
+      />
+      <Image
+        src="/images/couple-desktop.jpg"
+        alt={t("photoPlaceholder")}
+        fill
+        sizes="100vw"
+        className="hidden object-cover md:block"
+        style={{ objectPosition: "50% 68%" }}
+      />
 
       <ScallopEdge edge="top" className="text-sand" />
       <ScallopEdge className="text-sand" />

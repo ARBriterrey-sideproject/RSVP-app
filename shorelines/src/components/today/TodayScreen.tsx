@@ -523,7 +523,7 @@ export function TodayScreen({
   return (
     <AppShell tab="today" tier={effectiveTier}>
       <div
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overflow-x-hidden"
         style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
       >
         {/* Breaks out of AppShell's max-w-content wrapper to stay full-bleed:
@@ -531,14 +531,16 @@ export function TodayScreen({
             regardless of the capped parent's own width/position.
 
             The text and the palm sit in their own `max-w-content` box rather
-            than in the header directly. The scroll container above is
-            `overflow-y-auto`, which computes `overflow-x` to `auto` too, so on
-            a viewport wider than the content column the breakout is clipped
-            back to that column — content laid out against the full-width
-            header would start off-screen left and lose the date, the greeting
-            and the summary (white-on-sand, so silently). Centring it here
-            keeps it inside the visible band on desktop, and still lines up if
-            the clip ever goes away. */}
+            than in the header directly. `overflow-x: auto` does NOT clip an
+            overflowing child back to the container's column — it makes the
+            overflow *scrollable*, which on a viewport wider than the content
+            column left this pane with a genuine, empty horizontal scrollbar
+            (confirmed via scrollWidth/clientWidth: at 1920px wide,
+            scrollWidth was 1920 against a 672px clientWidth). `overflow-x-hidden`
+            keeps the breakout purely visual, matching RsvpFlow's scroll
+            container, which already carries the same pairing for the same
+            reason (its "done" banner does the same full-bleed trick). Centring
+            the text here still keeps it inside the visible band on desktop. */}
         <header className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-[linear-gradient(165deg,var(--color-deeptide)_0%,var(--color-shallows-bright)_55%,var(--color-shallows)_100%)] pb-[34px] pt-[max(60px,env(safe-area-inset-top))]">
           <div className="animate-tide pointer-events-none absolute inset-0 bg-[radial-gradient(50%_45%_at_25%_25%,rgba(226,138,118,0.45),transparent_70%),radial-gradient(45%_45%_at_85%_60%,rgba(255,236,200,0.55),transparent_70%)]" />
           <div className="relative mx-auto w-full max-w-content px-6">

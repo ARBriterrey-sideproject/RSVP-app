@@ -1,0 +1,62 @@
+{
+  "tiers": [
+    "full",
+    "wedding_only",
+    "reception_only"
+  ],
+  "eventIds": [
+    "mehendi",
+    "haldi",
+    "sangeet",
+    "wedding",
+    "reception"
+  ],
+  "dietary": [
+    "vegetarian",
+    "non_vegetarian"
+  ],
+  "transportModes": [
+    "airplane",
+    "train",
+    "self"
+  ],
+  "locales": [
+    "en",
+    "hi",
+    "kn",
+    "or"
+  ],
+  "staffRoles": [
+    "coordinator",
+    "couple",
+    "admin"
+  ],
+  "staffRoleRank": {
+    "coordinator": 1,
+    "couple": 2,
+    "admin": 3
+  },
+  "partySizeSoftCap": 15,
+  "eventStartTimes": {
+    "mehendi": {
+      "startsAt": "2026-12-28T19:00:00+05:30",
+      "endsAt": "2026-12-28T21:00:00+05:30"
+    },
+    "haldi": {
+      "startsAt": "2026-12-29T10:00:00+05:30",
+      "endsAt": "2026-12-29T14:00:00+05:30"
+    },
+    "sangeet": {
+      "startsAt": "2026-12-29T18:00:00+05:30",
+      "endsAt": "2026-12-29T21:00:00+05:30"
+    },
+    "wedding": {
+      "startsAt": "2026-12-30T10:00:00+05:30",
+      "endsAt": "2026-12-30T14:00:00+05:30"
+    },
+    "reception": {
+      "startsAt": "2026-12-30T18:30:00+05:30",
+      "endsAt": "2026-12-30T21:00:00+05:30"
+    }
+  }
+}

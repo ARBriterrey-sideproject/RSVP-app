@@ -42,7 +42,7 @@ export const weddingConfig: WeddingConfig = {
   /** The instance's own name. Untranslated — it's a proper noun in all four. */
   appName: "Shorelines",
 
-  /** PLACEHOLDER — "Shubham" matches the repo path; confirm both. */
+  /** CONFIRMED by the couple: groom Shubham, bride Amruta. */
   couple: {
     partnerA: "Shubham",
     partnerB: "Amruta",
@@ -110,9 +110,7 @@ export const weddingConfig: WeddingConfig = {
    *
    * Venues are now real properties, given by the couple: Gopalpur Resort for
    * Mehendi, Haldi, Sangeet and the Reception, and OTDC Panthanivas for the
-   * wedding on the 30th. **The wedding venue is not yet finalised** — the couple
-   * said they'd confirm, so treat OTDC Panthanivas as their current intention,
-   * not a settled fact, and expect to change that one row.
+   * wedding on the 30th. **OTDC Panthanivas is CONFIRMED** as the wedding venue.
    *
    * `mapsCid` is the Google Maps place id "Get directions" links to, and
    * `mapsQuery` — the place string Google's own short link resolves to — is the
