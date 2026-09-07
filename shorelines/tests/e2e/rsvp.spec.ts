@@ -66,8 +66,17 @@ test.describe("RSVP golden path", () => {
     await expect(
       page.getByRole("heading", { name: "Getting there" })
     ).toBeVisible();
-    await page.getByLabel("Arrival date").fill("2026-12-28");
-    await page.getByLabel("Departure date").fill("2026-12-31");
+    // The date fields are a Popover + react-day-picker Calendar, not native
+    // inputs (see DateCard in StepTravel.tsx) — open each popover and click
+    // the day cell rather than `.fill()`. react-day-picker labels every day
+    // button with the full formatted date ("EEEE, MMMM do, yyyy"), which is
+    // unique within a single visible month and doesn't depend on the
+    // (untranslated-here) weekday name, so matching on just month/day/year
+    // is enough.
+    await page.getByLabel("Arrival date").click();
+    await page.getByRole("button", { name: /December 28th, 2026/ }).click();
+    await page.getByLabel("Departure date").click();
+    await page.getByRole("button", { name: /December 31st, 2026/ }).click();
     await page.getByRole("button", { name: /^Airplane\b/ }).click();
     // Dates and mode are the whole step now: the couple withdrew the airport
     // pickup and asked for the flight/train number to go with it, so the
