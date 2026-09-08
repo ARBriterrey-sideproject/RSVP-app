@@ -98,7 +98,7 @@ export async function InviteLanding({
 
       <section className="mx-auto w-full max-w-content px-6 pt-1.5">
         <h2 className="mb-4 text-center font-sans text-[9.5px] font-medium uppercase tracking-[0.3em] text-driftwood-faint">
-          {t("daysHeading", { days: events.length })}
+          {t("daysHeading", { days: dayCount(events) })}
         </h2>
 
         <ul className="flex flex-col gap-2.5">
