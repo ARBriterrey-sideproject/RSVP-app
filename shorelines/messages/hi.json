@@ -346,7 +346,12 @@
       "mixedMenu": "अलग-अलग",
       "arriving": "पहुँचना",
       "comingBy": "किससे",
-      "changeReply": "उत्तर बदलें"
+      "changeReply": "उत्तर बदलें",
+      "withdraw": "अपना RSVP वापस लें",
+      "withdrawConfirm": "आपको न आने वाला दर्ज कर दिया जाएगा। योजना बदले तो {date} तक फिर से RSVP कर सकते हैं।",
+      "withdrawConfirmButton": "पुष्टि करें",
+      "withdrawCancel": "रद्द करें",
+      "withdrawing": "वापस ली जा रही है…"
     },
     "share": {
       "title": "अपने परिवार के साथ साझा करें",

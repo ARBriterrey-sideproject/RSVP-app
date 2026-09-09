@@ -349,7 +349,12 @@
       "mixedMenu": "ମିଶ୍ରିତ",
       "arriving": "ଆସିବା",
       "comingBy": "କେଉଁଥିରେ",
-      "changeReply": "ଉତ୍ତର ବଦଳାନ୍ତୁ"
+      "changeReply": "ଉତ୍ତର ବଦଳାନ୍ତୁ",
+      "withdraw": "ମୋ RSVP ପ୍ରତ୍ୟାହାର କରନ୍ତୁ",
+      "withdrawConfirm": "ଆପଣ ଆସୁନାହାନ୍ତି ବୋଲି ଦର୍ଜ ହେବ। ଯୋଜନା ବଦଳିଲେ {date} ପର୍ଯ୍ୟନ୍ତ ପୁଣି RSVP କରିପାରିବେ।",
+      "withdrawConfirmButton": "ନିଶ୍ଚିତ କରନ୍ତୁ",
+      "withdrawCancel": "ବାତିଲ୍ କରନ୍ତୁ",
+      "withdrawing": "ପ୍ରତ୍ୟାହାର ହେଉଛି…"
     },
     "share": {
       "title": "ପରିବାର ସହିତ ସେୟାର କରନ୍ତୁ",

@@ -290,7 +290,12 @@
       "mixedMenu": "Mixed",
       "arriving": "Arriving",
       "comingBy": "Coming by",
-      "changeReply": "Change my reply"
+      "changeReply": "Change my reply",
+      "withdraw": "Withdraw my RSVP",
+      "withdrawConfirm": "You'll be marked as not attending. You can RSVP again any time before {date} if plans change.",
+      "withdrawConfirmButton": "Confirm",
+      "withdrawCancel": "Cancel",
+      "withdrawing": "Withdrawing…"
     },
     "share": {
       "title": "Share with your family",

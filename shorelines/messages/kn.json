@@ -349,7 +349,12 @@
       "mixedMenu": "ಬೇರೆ ಬೇರೆ",
       "arriving": "ಬರುವಿಕೆ",
       "comingBy": "ಯಾವುದರಲ್ಲಿ",
-      "changeReply": "ಉತ್ತರ ಬದಲಾಯಿಸಿ"
+      "changeReply": "ಉತ್ತರ ಬದಲಾಯಿಸಿ",
+      "withdraw": "ನನ್ನ RSVP ಹಿಂಪಡೆಯಿರಿ",
+      "withdrawConfirm": "ನೀವು ಬರುತ್ತಿಲ್ಲ ಎಂದು ದಾಖಲಾಗುತ್ತದೆ. ಯೋಜನೆ ಬದಲಾದರೆ {date} ವರೆಗೆ ಮತ್ತೆ RSVP ಮಾಡಬಹುದು.",
+      "withdrawConfirmButton": "ದೃಢೀಕರಿಸಿ",
+      "withdrawCancel": "ರದ್ದುಮಾಡಿ",
+      "withdrawing": "ಹಿಂಪಡೆಯಲಾಗುತ್ತಿದೆ…"
     },
     "share": {
       "title": "ನಿಮ್ಮ ಕುಟುಂಬದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ",

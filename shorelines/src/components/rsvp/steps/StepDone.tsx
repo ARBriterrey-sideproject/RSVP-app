@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   COUPLE,
@@ -38,7 +39,9 @@ export function StepDone({
   shareCode,
   recoveryCode,
   tier,
+  busy,
   onEdit,
+  onWithdraw,
 }: {
   party: PartyMember[];
   attendingCount: number;
@@ -50,11 +53,16 @@ export function StepDone({
   /** Null until the callable has minted one — see RecoveryLink. */
   recoveryCode: string | null;
   tier: Tier;
+  /** True while a submission (edit or withdrawal) is in flight. */
+  busy: boolean;
   onEdit: () => void;
+  /** Sets every event to not-attending and resubmits — a one-tap decline. */
+  onWithdraw: () => Promise<void>;
 }) {
   const t = useTranslations("rsvp.done");
   const tWedding = useTranslations("wedding");
   const tag = useLocaleTag();
+  const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
 
   const shared = party.every((m) => m.dietary === party[0].dietary)
     ? dietaryCopy(tWedding, party[0].dietary).title
@@ -161,6 +169,42 @@ export function StepDone({
       >
         {t("changeReply")}
       </button>
+
+      {/* A guest who's already declined has nothing left to withdraw — "Change
+          my reply" above is their way to reverse that, same as anyone else's. */}
+      {!declined &&
+        (confirmingWithdraw ? (
+          <div className="mt-3.5 flex flex-col items-center gap-2">
+            <p className="font-sans text-xs text-driftwood-soft">
+              {t("withdrawConfirm", { date: rsvpDeadlineLabel(tag) })}
+            </p>
+            <div className="flex items-center gap-4">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onWithdraw()}
+                className="font-sans text-xs font-medium uppercase tracking-[0.14em] text-coral-ink disabled:opacity-50"
+              >
+                {busy ? t("withdrawing") : t("withdrawConfirmButton")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingWithdraw(false)}
+                className="font-sans text-xs uppercase tracking-[0.14em] text-driftwood-faint"
+              >
+                {t("withdrawCancel")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirmingWithdraw(true)}
+            className="mt-3.5 font-sans text-xs font-medium uppercase tracking-[0.14em] text-driftwood-faint"
+          >
+            {t("withdraw")}
+          </button>
+        ))}
     </div>
   );
 }

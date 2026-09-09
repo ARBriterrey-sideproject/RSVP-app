@@ -267,56 +267,77 @@ export function RsvpFlow({
   const attendingCount = events.filter((e) => attending[e.id]).length;
   const declining = attendingCount === 0;
 
-  const submit = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const { functions } = getFirebase();
-      const call = httpsCallable<
-        unknown,
-        { shareCode?: string; recoveryCode?: string }
-      >(functions, "submitRsvp");
+  // Takes an optional override so the "Withdraw my RSVP" button on the done
+  // screen can submit an all-declined reply directly, without first routing
+  // the guest back through `attending` state and the wizard's own screens.
+  const submit = useCallback(
+    async (attendanceOverride?: Record<string, boolean>) => {
+      setBusy(true);
+      setError(null);
+      try {
+        const { functions } = getFirebase();
+        const call = httpsCallable<
+          unknown,
+          { shareCode?: string; recoveryCode?: string }
+        >(functions, "submitRsvp");
 
-      const response = await call({
-        // Sent only so the server can set it on FIRST creation. On any later
-        // submission the server ignores this and keeps the stored tier.
-        tier: effectiveTier,
-        // The language they actually replied in, so the couple can send this
-        // family a WhatsApp message they can read.
-        language: locale,
-        party: party.map(({ name, ageGroup, dietary }) => ({
-          name: name.trim(),
-          ageGroup,
-          dietary,
-        })),
-        perEventAttendance: attending,
-        notes: notes.trim() || null,
-        travel,
-        // The couple's way to call, nothing more. Identity comes from the
-        // verified phone claim on the token, which the server reads itself.
-        phone: toE164(phone) ?? (phone.trim() || null),
-      });
+        const attendanceToSend = attendanceOverride ?? attending;
 
-      if (response.data?.shareCode) setShareCode(response.data.shareCode);
-      if (response.data?.recoveryCode)
-        setRecoveryCode(response.data.recoveryCode);
-      // `effectiveTier` and not the link's: the server has just fixed the
-      // stored tier to this, and it's the one `/` should redirect on.
-      markReplied(tierCode(effectiveTier));
-      setScreen("done");
-    } catch (err) {
-      // The Firebase message is English and untranslatable, but it's the only
-      // thing that tells the couple what actually failed when a guest reads it
-      // out over the phone. Keep it, framed by a sentence they can read.
-      setError(
-        err instanceof Error
-          ? `${t("errors.saveFailed")} ${err.message}`
-          : t("errors.saveFailed")
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [attending, effectiveTier, locale, notes, party, phone, t, travel]);
+        const response = await call({
+          // Sent only so the server can set it on FIRST creation. On any later
+          // submission the server ignores this and keeps the stored tier.
+          tier: effectiveTier,
+          // The language they actually replied in, so the couple can send this
+          // family a WhatsApp message they can read.
+          language: locale,
+          party: party.map(({ name, ageGroup, dietary }) => ({
+            name: name.trim(),
+            ageGroup,
+            dietary,
+          })),
+          perEventAttendance: attendanceToSend,
+          notes: notes.trim() || null,
+          travel,
+          // The couple's way to call, nothing more. Identity comes from the
+          // verified phone claim on the token, which the server reads itself.
+          phone: toE164(phone) ?? (phone.trim() || null),
+        });
+
+        // Only reflected into state once the callable has actually accepted
+        // it — a failed withdrawal shouldn't leave the done screen showing
+        // "declined" for a reply that's still, server-side, an acceptance.
+        if (attendanceOverride) setAttending(attendanceOverride);
+        if (response.data?.shareCode) setShareCode(response.data.shareCode);
+        if (response.data?.recoveryCode)
+          setRecoveryCode(response.data.recoveryCode);
+        // `effectiveTier` and not the link's: the server has just fixed the
+        // stored tier to this, and it's the one `/` should redirect on.
+        markReplied(tierCode(effectiveTier));
+        setScreen("done");
+      } catch (err) {
+        // The Firebase message is English and untranslatable, but it's the only
+        // thing that tells the couple what actually failed when a guest reads it
+        // out over the phone. Keep it, framed by a sentence they can read.
+        setError(
+          err instanceof Error
+            ? `${t("errors.saveFailed")} ${err.message}`
+            : t("errors.saveFailed")
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [attending, effectiveTier, locale, notes, party, phone, t, travel]
+  );
+
+  // One tap from the done screen to a full decline — sets every event to
+  // not-attending and reuses `submit` exactly as the manual
+  // untick-everything path already does, just without routing the guest
+  // back through the wizard's own screens to get there.
+  const withdraw = useCallback(() => {
+    const allDeclined = Object.fromEntries(events.map((e) => [e.id, false]));
+    return submit(allDeclined);
+  }, [events, submit]);
 
   const advance = useCallback(async () => {
     setError(null);
@@ -511,7 +532,9 @@ export function RsvpFlow({
             shareCode={shareCode}
             recoveryCode={recoveryCode}
             tier={effectiveTier}
+            busy={busy}
             onEdit={() => setScreen("days")}
+            onWithdraw={withdraw}
           />
         )}
 
