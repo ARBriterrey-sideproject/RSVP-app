@@ -75,6 +75,16 @@ export async function InviteLanding({
     ? eventCopy(tWedding, resortEvent).venueShort
     : null;
 
+  // The ceremony venue is the one place a guest goes that isn't the resort, so
+  // it gets its own card — but only for the guests who are actually going
+  // there. This reads off the tier-filtered `events`, not `config.events`:
+  // that's what makes it appear for `full` and `wedding_only` and stay out of
+  // a reception-only guest's invitation, with no tier named here at all.
+  const ceremonyEvent = events.find((event) => event.id === "wedding");
+  const ceremonyName = ceremonyEvent
+    ? eventCopy(tWedding, ceremonyEvent).venueShort
+    : null;
+
   return (
     <main className="relative w-full overflow-x-hidden bg-sand">
       <Curtain />
@@ -110,7 +120,12 @@ export async function InviteLanding({
         </ul>
       </section>
 
-      <TravelAndStay resortEvent={resortEvent} resortName={resortName} />
+      <TravelAndStay
+        resortEvent={resortEvent}
+        resortName={resortName}
+        ceremonyEvent={ceremonyEvent}
+        ceremonyName={ceremonyName}
+      />
       <PhotoBand />
 
       <section className="scroll-lift mx-auto w-full max-w-content px-[30px] pt-[34px] pb-[46px] text-center">
@@ -360,17 +375,22 @@ async function DayCard({ event }: { event: WeddingEvent }) {
  * for whenever one of them is genuinely laid on. The airport and the station
  * are real and unconditional.
  *
- * `resortEvent`/`resortName` are computed once by the caller (see the comment
- * on that lookup in `InviteLanding`) and passed down rather than re-derived
- * here, so there is only ever one place that decides which event stands in
- * for "the resort".
+ * `resortEvent`/`resortName` and `ceremonyEvent`/`ceremonyName` are computed
+ * once by the caller (see the comments on those lookups in `InviteLanding`)
+ * and passed down rather than re-derived here, so there is only ever one place
+ * that decides which event stands in for each venue — and only one place that
+ * decides whether this guest is going to the ceremony at all.
  */
 async function TravelAndStay({
   resortEvent,
   resortName,
+  ceremonyEvent,
+  ceremonyName,
 }: {
   resortEvent: WeddingEvent | undefined;
   resortName: string | null;
+  ceremonyEvent: WeddingEvent | undefined;
+  ceremonyName: string | null;
 }) {
   const t = await getTranslations("landing");
   const tToday = await getTranslations("today");
@@ -384,15 +404,22 @@ async function TravelAndStay({
         {t("travelHeading")}
       </h2>
 
-      {resortEvent && resortName && (
-        <div className="mb-2.5">
+      <div className="mb-2.5 flex flex-col gap-2.5">
+        {resortEvent && resortName && (
           <LocationCard
             href={mapsUrl(resortEvent)}
             name={resortName}
             directionsLabel={tToday("getDirections")}
           />
-        </div>
-      )}
+        )}
+        {ceremonyEvent && ceremonyName && (
+          <LocationCard
+            href={mapsUrl(ceremonyEvent)}
+            name={ceremonyName}
+            directionsLabel={tToday("getDirections")}
+          />
+        )}
+      </div>
 
       <div className="flex flex-col gap-2.5">
         {/* Station and airport *names* stay Latin on purpose — a guest reads
@@ -452,10 +479,16 @@ function LogisticsRow({
 }
 
 /**
- * The resort card at the top of Travel & stay — a photo standing in for the
- * plain-text "Get directions" line that used to sit under the days list.
- * The image is the couple's own listing photo, not a stock shot: see
- * `public/images/resort.jpg`.
+ * A venue card at the top of Travel & stay — the venue's name and a link that
+ * opens it in Maps, standing in for the plain-text "Get directions" line that
+ * used to sit under the days list.
+ *
+ * It used to carry the resort's listing photo above the name. The couple asked
+ * for that photo out, and the same request added the ceremony venue as a second
+ * card — so the two cards match rather than one leading with a picture the
+ * other has no equivalent of. Which days happen at which venue is already on
+ * every `DayCard` above (`daypart · venueShort · dressCode`), so the bare name
+ * is enough here and needs no new string in four catalogues.
  */
 function LocationCard({
   href,
@@ -471,25 +504,14 @@ function LocationCard({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="group block overflow-hidden rounded-card bg-card"
+      className="group flex items-center justify-between gap-3 rounded-card bg-card px-4 py-3.5"
     >
-      <div className="relative w-full" style={{ height: 140 }}>
-        <Image
-          src="/images/resort.jpg"
-          alt={name}
-          fill
-          sizes="(min-width: 480px) 420px, 100vw"
-          className="object-cover"
-        />
-      </div>
-      <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-        <p className="font-sans text-[14.5px] font-medium leading-tight text-driftwood">
-          {name}
-        </p>
-        <span className="flex-none font-sans text-xs font-medium text-deeptide underline underline-offset-2 group-hover:no-underline">
-          {directionsLabel}
-        </span>
-      </div>
+      <p className="font-sans text-[14.5px] font-medium leading-tight text-driftwood">
+        {name}
+      </p>
+      <span className="flex-none font-sans text-xs font-medium text-deeptide underline underline-offset-2 group-hover:no-underline">
+        {directionsLabel}
+      </span>
     </a>
   );
 }
