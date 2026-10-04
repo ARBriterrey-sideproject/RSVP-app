@@ -64,25 +64,13 @@ export async function InviteLanding({
   const tWedding = await getTranslations("wedding");
   const tag = await localeTag();
 
-  // Gopalpur Resort hosts every event but the wedding ceremony itself
-  // (Engagement, Mehendi, Haldi, Sangeet, Reception all share the one
-  // mapsQuery/mapsCid) — read off `config.events` directly rather than the
-  // tier-filtered `events` above, since a wedding_only guest's only eligible
-  // event is the Panthanivas ceremony and would otherwise lose this link
-  // entirely even though the resort is still where their weekend is based.
-  const resortEvent = config.events.find((event) => event.id === "mehendi");
-  const resortName = resortEvent
-    ? eventCopy(tWedding, resortEvent).venueShort
-    : null;
-
-  // The ceremony venue is the one place a guest goes that isn't the resort, so
-  // it gets its own card — but only for the guests who are actually going
-  // there. This reads off the tier-filtered `events`, not `config.events`:
-  // that's what makes it appear for `full` and `wedding_only` and stay out of
-  // a reception-only guest's invitation, with no tier named here at all.
-  const ceremonyEvent = events.find((event) => event.id === "wedding");
-  const ceremonyName = ceremonyEvent
-    ? eventCopy(tWedding, ceremonyEvent).venueShort
+  // Every event is at the one venue, OTDC Panthanivas, so a single card
+  // covers the whole weekend. Read off `config.events` directly rather than
+  // the tier-filtered `events` above, so every tier gets the link whichever
+  // events their invitation shows.
+  const venueEvent = config.events[0];
+  const venueName = venueEvent
+    ? eventCopy(tWedding, venueEvent).venueShort
     : null;
 
   return (
@@ -121,10 +109,8 @@ export async function InviteLanding({
       </section>
 
       <TravelAndStay
-        resortEvent={resortEvent}
-        resortName={resortName}
-        ceremonyEvent={ceremonyEvent}
-        ceremonyName={ceremonyName}
+        venueEvent={venueEvent}
+        venueName={venueName}
       />
       <PhotoBand />
 
@@ -375,22 +361,17 @@ async function DayCard({ event }: { event: WeddingEvent }) {
  * for whenever one of them is genuinely laid on. The airport and the station
  * are real and unconditional.
  *
- * `resortEvent`/`resortName` and `ceremonyEvent`/`ceremonyName` are computed
- * once by the caller (see the comments on those lookups in `InviteLanding`)
- * and passed down rather than re-derived here, so there is only ever one place
- * that decides which event stands in for each venue — and only one place that
- * decides whether this guest is going to the ceremony at all.
+ * `venueEvent`/`venueName` are computed once by the caller (see the comment
+ * on that lookup in `InviteLanding`) and passed down rather than re-derived
+ * here, so there is only ever one place that decides which event stands in
+ * for the venue.
  */
 async function TravelAndStay({
-  resortEvent,
-  resortName,
-  ceremonyEvent,
-  ceremonyName,
+  venueEvent,
+  venueName,
 }: {
-  resortEvent: WeddingEvent | undefined;
-  resortName: string | null;
-  ceremonyEvent: WeddingEvent | undefined;
-  ceremonyName: string | null;
+  venueEvent: WeddingEvent | undefined;
+  venueName: string | null;
 }) {
   const t = await getTranslations("landing");
   const tToday = await getTranslations("today");
@@ -405,17 +386,10 @@ async function TravelAndStay({
       </h2>
 
       <div className="mb-2.5 flex flex-col gap-2.5">
-        {resortEvent && resortName && (
+        {venueEvent && venueName && (
           <LocationCard
-            href={mapsUrl(resortEvent)}
-            name={resortName}
-            directionsLabel={tToday("getDirections")}
-          />
-        )}
-        {ceremonyEvent && ceremonyName && (
-          <LocationCard
-            href={mapsUrl(ceremonyEvent)}
-            name={ceremonyName}
+            href={mapsUrl(venueEvent)}
+            name={venueName}
             directionsLabel={tToday("getDirections")}
           />
         )}
@@ -483,12 +457,11 @@ function LogisticsRow({
  * opens it in Maps, standing in for the plain-text "Get directions" line that
  * used to sit under the days list.
  *
- * It used to carry the resort's listing photo above the name. The couple asked
- * for that photo out, and the same request added the ceremony venue as a second
- * card — so the two cards match rather than one leading with a picture the
- * other has no equivalent of. Which days happen at which venue is already on
- * every `DayCard` above (`daypart · venueShort · dressCode`), so the bare name
- * is enough here and needs no new string in four catalogues.
+ * It used to carry Gopalpur Resort's listing photo, and later sat alongside a
+ * second card for the ceremony venue. The couple then moved every event to
+ * OTDC Panthanivas, so there is one card. The venue is also on every `DayCard`
+ * above (`daypart · venueShort · dressCode`), so the bare name is enough here
+ * and needs no new string in four catalogues.
  */
 function LocationCard({
   href,

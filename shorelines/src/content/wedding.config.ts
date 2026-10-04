@@ -17,20 +17,18 @@
 import type { WeddingConfig } from "./schema";
 
 /**
- * The two properties, written the way Google Maps itself resolves them.
+ * The one property, written the way Google Maps itself resolves it.
  *
- * The couple sent `maps.app.goo.gl` short links; these are what those expand
- * to. Naming them once here is the one concession to "no derived values" in
- * this file — five events share the resort, and five copies of a 60-character
- * address is five chances to fix four of them.
+ * Every event is at OTDC Panthanivas — the couple moved the Engagement,
+ * Mehendi, Haldi, Sangeet and Reception off Gopalpur Resort to join the
+ * wedding there. Naming the address once here is the one concession to "no
+ * derived values" in this file — six events share it, and six copies of a
+ * 60-character address is six chances to fix five of them.
  *
- * The CIDs come from the same two resolved links and are what "Get directions"
- * actually uses; the address is now the fallback. See `mapsCid` in schema.ts
- * for why, and `mapsUrl` in wedding.ts for the order.
+ * The CID comes from the couple's resolved short link and is what "Get
+ * directions" actually uses; the address is the fallback. See `mapsCid` in
+ * schema.ts for why, and `mapsUrl` in wedding.ts for the order.
  */
-const GOPALPUR_RESORT =
-  "Gopalpur Resort, near Gopalpur Light House, Gopalpur, Brahmapur, Odisha 761002, India";
-const GOPALPUR_RESORT_CID = "3510606475280429491";
 const OTDC_PANTHANIVAS =
   "OTDC Panthanivas, Gopalpur, Gopalpur, Boxipalli, Odisha 761002, India";
 const OTDC_PANTHANIVAS_CID = "2910290587342671172";
@@ -108,9 +106,9 @@ export const weddingConfig: WeddingConfig = {
   /**
    * The couple's own schedule, 28–30 December 2026. Times are CONFIRMED.
    *
-   * Venues are now real properties, given by the couple: Gopalpur Resort for
-   * Mehendi, Haldi, Sangeet and the Reception, and OTDC Panthanivas for the
-   * wedding on the 30th. **OTDC Panthanivas is CONFIRMED** as the wedding venue.
+   * Every event is at OTDC Panthanivas, Gopalpur — **CONFIRMED** by the couple.
+   * (The Engagement, Mehendi, Haldi, Sangeet and Reception were at Gopalpur
+   * Resort until the couple moved them; nothing references the resort now.)
    *
    * `mapsCid` is the Google Maps place id "Get directions" links to, and
    * `mapsQuery` — the place string Google's own short link resolves to — is the
@@ -128,9 +126,9 @@ export const weddingConfig: WeddingConfig = {
    * the Haldi is on a different day, so the two never sit adjacent except in
    * the landing's full list.
    *
-   * `venueShort` is the property name too, so it repeats across four events on
-   * the landing — the thing its own doc comment warns about. That's the honest
-   * reading until the resort names the actual lawn/hall for each ceremony; when
+   * `venueShort` is the property name too, so it repeats across all six events
+   * on the landing — the thing its own doc comment warns about. That's the
+   * honest reading until the venue names the actual lawn/hall for each one; when
    * it does, the room name belongs in `venueShort` and the property in `venue`.
    *
    * Dress codes are still PLACEHOLDERS (acceptable as written, per the couple).
@@ -148,10 +146,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Engagement and Ring Exchange",
       startsAt: "2026-12-28T17:00:00+05:30",
       endsAt: "2026-12-28T18:30:00+05:30",
-      venue: "Gopalpur Resort",
-      venueShort: "Gopalpur Resort",
-      mapsQuery: GOPALPUR_RESORT,
-      mapsCid: GOPALPUR_RESORT_CID,
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       // PLACEHOLDER, like every other dress code here.
       dressCode: "Soft pastels",
       daypart: "Sunset",
@@ -163,10 +161,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Mehendi",
       startsAt: "2026-12-28T19:00:00+05:30",
       endsAt: "2026-12-28T21:00:00+05:30",
-      venue: "Gopalpur Resort",
-      venueShort: "Gopalpur Resort",
-      mapsQuery: GOPALPUR_RESORT,
-      mapsCid: GOPALPUR_RESORT_CID,
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Linen & green",
       daypart: "Evening",
       tiers: ["full"],
@@ -177,10 +175,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Haldi",
       startsAt: "2026-12-29T10:00:00+05:30",
       endsAt: "2026-12-29T14:00:00+05:30",
-      venue: "Gopalpur Resort",
-      venueShort: "Gopalpur Resort",
-      mapsQuery: GOPALPUR_RESORT,
-      mapsCid: GOPALPUR_RESORT_CID,
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Wear yellow · barefoot",
       daypart: "Morning",
       tiers: ["full"],
@@ -191,10 +189,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Sangeet",
       startsAt: "2026-12-29T18:00:00+05:30",
       endsAt: "2026-12-29T21:00:00+05:30",
-      venue: "Gopalpur Resort",
-      venueShort: "Gopalpur Resort",
-      mapsQuery: GOPALPUR_RESORT,
-      mapsCid: GOPALPUR_RESORT_CID,
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Dance-ready",
       daypart: "Evening",
       tiers: ["full"],
@@ -205,7 +203,6 @@ export const weddingConfig: WeddingConfig = {
       name: "Wedding",
       startsAt: "2026-12-30T10:00:00+05:30",
       endsAt: "2026-12-30T14:00:00+05:30",
-      // NOT FINALISED — the couple's current choice, to be confirmed.
       venue: "OTDC Panthanivas",
       venueShort: "OTDC Panthanivas",
       mapsQuery: OTDC_PANTHANIVAS,
@@ -221,10 +218,10 @@ export const weddingConfig: WeddingConfig = {
       name: "Reception",
       startsAt: "2026-12-30T18:30:00+05:30",
       endsAt: "2026-12-30T21:00:00+05:30",
-      venue: "Gopalpur Resort",
-      venueShort: "Gopalpur Resort",
-      mapsQuery: GOPALPUR_RESORT,
-      mapsCid: GOPALPUR_RESORT_CID,
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Formal",
       daypart: "Evening",
       tiers: ["full", "reception_only"],

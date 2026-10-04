@@ -297,7 +297,7 @@ export function eventsForTier(
  *
  * Prefers the place's CID, because `?q=<address>` runs a *search*: even with a
  * perfectly resolved address Google can answer with a results page, which is
- * how a guest tapping "Get directions" for the resort ended up choosing from a
+ * how a guest tapping "Get directions" for a venue ended up choosing from a
  * list. `?cid=` names one listing and opens it.
  *
  * The `?q=` form stays as the fallback for any venue without a CID — a private
