@@ -51,12 +51,13 @@ export const weddingConfig: WeddingConfig = {
    * rsvpDeadline moved from 1 December to 1 OCTOBER at the couple's request —
    * their printed invitation says "inform us by October 1st" and the app was
    * contradicting it. Nearly three months of chasing time rather than four
-   * weeks, which is their call to make, not ours.
+   * weeks, which is their call to make, not ours. Extended to 15 OCTOBER at
+   * the couple's request once 1 October had passed.
    */
   dates: {
     firstDay: "2026-12-28",
     lastDay: "2026-12-30",
-    rsvpDeadline: "2026-10-01",
+    rsvpDeadline: "2026-10-15",
     timeZone: "Asia/Kolkata",
   },
 
