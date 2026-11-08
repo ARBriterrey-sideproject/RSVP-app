@@ -1,0 +1,22 @@
+# Production can only be reached by promoting `preview`.
+# This job is a required status check on the `production` branch ruleset.
+name: Promotion guard
+
+on:
+  pull_request:
+    branches: [production]
+
+jobs:
+  only-from-preview:
+    name: Promote only from preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require head branch to be preview
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] || [ "$HEAD_REF" != "preview" ]; then
+            echo "::error::Only the 'preview' branch may be merged into 'production' (got '$HEAD_REPO:$HEAD_REF')."
+            exit 1
+          fi
