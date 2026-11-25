@@ -36,6 +36,7 @@
  * anywhere. That is the one edge the alias exists to keep swappable.
  */
 import { weddingConfig } from "@wedding/config";
+import { inChronologicalOrder } from "./overlay";
 import type {
   EventAccent,
   ScheduleItem,
@@ -56,6 +57,13 @@ export type {
 } from "./schema";
 
 /**
+ * The literal with its events and meals sorted by start time — sorted once, at
+ * module load. Every export below reads this, never `weddingConfig` directly,
+ * so the order things render in can never disagree with their times.
+ */
+const CHRONOLOGICAL_CONFIG = inChronologicalOrder(weddingConfig);
+
+/**
  * The config this build was compiled against.
  *
  * Exported as a function rather than the bare object so the eventual runtime
@@ -64,7 +72,7 @@ export type {
  * literal; that is the whole implementation and deliberately so.
  */
 export function getWeddingConfig(): WeddingConfig {
-  return weddingConfig;
+  return CHRONOLOGICAL_CONFIG;
 }
 
 /* -------------------------------------------------------------------------
@@ -117,8 +125,8 @@ export const APP_NAME = weddingConfig.appName;
 export const COUPLE = weddingConfig.couple;
 export const WEDDING_DATES = weddingConfig.dates;
 export const DESTINATION = weddingConfig.destination;
-export const EVENTS: WeddingEvent[] = weddingConfig.events;
-export const SCHEDULE_ITEMS: ScheduleItem[] = weddingConfig.schedule;
+export const EVENTS: WeddingEvent[] = CHRONOLOGICAL_CONFIG.events;
+export const SCHEDULE_ITEMS: ScheduleItem[] = CHRONOLOGICAL_CONFIG.schedule;
 export const PARTY_SIZE_SOFT_CAP = weddingConfig.party.softCap;
 
 /**

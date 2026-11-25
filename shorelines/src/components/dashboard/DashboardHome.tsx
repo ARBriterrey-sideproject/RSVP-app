@@ -52,7 +52,7 @@ const PANELS = [
     title: "Replies",
     description: "Who's coming, headcounts, veg and non-veg splits per event.",
     group: "Guests",
-    render: () => <RepliesPanel />,
+    render: ({ config }) => <RepliesPanel events={config.events} />,
   },
   {
     capability: "viewContactDetails",

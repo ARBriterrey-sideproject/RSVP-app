@@ -111,15 +111,37 @@ function mergeSchedule(
 }
 
 /**
- * Re-sorting is not cosmetic.
+ * The config with both lists in start-time order, whatever order it was
+ * written in.
  *
- * `WeddingConfig` documents both lists as chronological and the landing, the
- * timeline and the day-picker all render them in the order given. Moving the
- * Haldi to the evening without re-sorting leaves a schedule that reads 10am,
- * 6pm, 10pm, 11am — which looks like a rendering bug rather than an edit.
+ * Order is *derived*, never authored. The landing, the timeline, the day-picker
+ * and the dashboard all render events in the order given, and relying on the
+ * literal to be hand-sorted is how the Haldi (8 am) came to be shown after the
+ * Mehendi (1 pm) once the couple swapped them on the 29th: the times moved and
+ * the array didn't. `getWeddingConfig()` runs the literal through this, and
+ * `applyOverlay` re-sorts after every merge, so a time edited from the
+ * dashboard reorders every screen with it.
+ */
+export function inChronologicalOrder(config: WeddingConfig): WeddingConfig {
+  return {
+    ...config,
+    events: sortByStart(config.events),
+    schedule: sortByStart(config.schedule),
+  };
+}
+
+/**
+ * Re-sorting is not cosmetic — see `inChronologicalOrder`.
+ *
+ * Compared as instants, not strings: string order only agrees with time order
+ * while every value carries the same offset, and nothing guarantees that of a
+ * value written from a dashboard. Stable, so two items at the same minute keep
+ * their written order.
  */
 function sortByStart<T extends { startsAt: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  return [...items].sort(
+    (a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)
+  );
 }
 
 /**

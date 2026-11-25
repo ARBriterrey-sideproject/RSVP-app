@@ -124,9 +124,10 @@ export const weddingConfig: WeddingConfig = {
    * ours too — the message gave starts only. Times are overlay data (see
    * WeddingOverlay in schema.ts), so later moves needn't be a rebuild.
    *
-   * It reuses `warmgold` because there are five accent names and six events;
-   * the Haldi is on a different day, so the two never sit adjacent except in
-   * the landing's full list.
+   * There are five accent names and six events, so one is shared: the
+   * Engagement takes `clay` with the Reception, first and last in the list and
+   * never adjacent. (It used to share `warmgold` with the Haldi, which stopped
+   * working once the Haldi became the very next event.)
    *
    * `venueShort` is the property name too, so it repeats across all six events
    * on the landing — the thing its own doc comment warns about. That's the
@@ -140,7 +141,9 @@ export const weddingConfig: WeddingConfig = {
    *   wedding_only    → the wedding
    *   reception_only  → the reception
    *
-   * Order is chronological and load-bearing.
+   * Written in time order for the reader's sake only — nothing depends on it.
+   * Every screen sorts by `startsAt` (`inChronologicalOrder` in overlay.ts),
+   * so moving a time, here or from the dashboard, reorders the app with it.
    */
   events: [
     {
@@ -155,6 +158,20 @@ export const weddingConfig: WeddingConfig = {
       // PLACEHOLDER, like every other dress code here.
       dressCode: "Soft pastels",
       daypart: "Sunset",
+      tiers: ["full"],
+      accent: "clay",
+    },
+    {
+      id: "haldi",
+      name: "Haldi",
+      startsAt: "2026-12-29T08:00:00+05:30",
+      endsAt: "2026-12-29T10:00:00+05:30",
+      venue: "OTDC Panthanivas",
+      venueShort: "OTDC Panthanivas",
+      mapsQuery: OTDC_PANTHANIVAS,
+      mapsCid: OTDC_PANTHANIVAS_CID,
+      dressCode: "Wear yellow · barefoot",
+      daypart: "Morning",
       tiers: ["full"],
       accent: "warmgold",
     },
@@ -171,20 +188,6 @@ export const weddingConfig: WeddingConfig = {
       daypart: "Afternoon",
       tiers: ["full"],
       accent: "palm",
-    },
-    {
-      id: "haldi",
-      name: "Haldi",
-      startsAt: "2026-12-29T08:00:00+05:30",
-      endsAt: "2026-12-29T10:00:00+05:30",
-      venue: "OTDC Panthanivas",
-      venueShort: "OTDC Panthanivas",
-      mapsQuery: OTDC_PANTHANIVAS,
-      mapsCid: OTDC_PANTHANIVAS_CID,
-      dressCode: "Wear yellow · barefoot",
-      daypart: "Morning",
-      tiers: ["full"],
-      accent: "warmgold",
     },
     {
       id: "sangeet",
