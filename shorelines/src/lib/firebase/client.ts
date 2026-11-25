@@ -72,8 +72,10 @@ function connectEmulatorsOnce(
   });
   // Port overridable for the same reason the rules suites allow it (see
   // tests/rules/env.ts): 8080 is a popular port, and someone else's container
-  // sitting on it shouldn't make the app unrunnable locally. Move it here,
-  // in src/lib/wedding/live.ts, and in firebase.json together.
+  // sitting on it shouldn't make the app unrunnable locally. Move it here
+  // and in firebase.json together. (The Functions port, 5001, is also
+  // hardcoded in src/lib/wedding/live.ts, which reads config/live through the
+  // getWeddingLive function.)
   connectFirestoreEmulator(db, "127.0.0.1", FIRESTORE_EMULATOR_PORT);
   connectFunctionsEmulator(fns, "127.0.0.1", 5001);
   connectStorageEmulator(storage, "127.0.0.1", 9199);

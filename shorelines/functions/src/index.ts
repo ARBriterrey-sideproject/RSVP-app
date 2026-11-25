@@ -3,7 +3,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
 initializeApp();
@@ -2067,6 +2067,69 @@ export const updateWeddingLive = onCall(
     });
 
     return { ok: true, updatedAt: update.updatedAt };
+  }
+);
+
+/**
+ * The read half of `updateWeddingLive`: `config/live` as plain JSON, for the
+ * Next server to merge over the compiled literal (src/lib/wedding/live.ts).
+ *
+ * WHY THIS EXISTS. The Next server used to read the document straight off the
+ * Firestore REST API, unauthenticated — the rules make it a public `get`. That
+ * worked against the emulator and silently failed in production: with App Check
+ * enforced on Firestore, a request carrying no App Check token is refused with a
+ * 403 whatever the rules say, and a server has no browser to mint one. live.ts
+ * swallows read failures by design, so every dashboard edit saved, and every
+ * guest kept seeing the compiled times.
+ *
+ * The Admin SDK sits outside App Check, so reading here and handing the result
+ * back over HTTP restores the intended access level — exactly the public `get`
+ * the rules already grant — without putting a service-account key on Vercel.
+ *
+ * Deliberately an `onRequest`, not a callable: the caller is `fetch` inside a
+ * server component, which is what lets Next cache it (one call a minute for
+ * every guest, not one per render). There is no App Check here for the same
+ * reason there was none on the REST read — the server can't present a token —
+ * and nothing in the response is not already on every guest's screen.
+ *
+ * Read-only, GET-only, a fixed document, and the fields `applyOverlay` reads
+ * and nothing else. A null body means "no overlay yet", the ordinary case
+ * before the couple's first edit, and live.ts treats it that way.
+ */
+export const getWeddingLive = onRequest(
+  { region: REGION, maxInstances: 5, memory: "256MiB", invoker: "public" },
+  async (req, res) => {
+    if (req.method !== "GET") {
+      res.set("Allow", "GET").status(405).send("Method Not Allowed");
+      return;
+    }
+
+    try {
+      const snap = await db.collection("config").doc("live").get();
+      // Next caches this server-side (live.ts); nothing in between should.
+      res.set("Cache-Control", "no-store");
+      // "No overlay" is a 200 with a null body, not a 404. Next's fetch cache
+      // only ever stores a 200, so a 404 can't replace a cached overlay: once
+      // the document had existed, deleting it would leave every guest route
+      // serving its last contents indefinitely.
+      if (!snap.exists) {
+        res.status(200).json(null);
+        return;
+      }
+
+      const data = snap.data() ?? {};
+      res.status(200).json({
+        events: data.events,
+        schedule: data.schedule,
+        emergencyContacts: data.emergencyContacts,
+        songRequestsOverride: data.songRequestsOverride,
+        updatedAt: data.updatedAt,
+        updatedBy: data.updatedBy,
+      });
+    } catch (error) {
+      logger.error("config/live read failed", error);
+      res.status(500).json({ error: "unavailable" });
+    }
   }
 );
 
