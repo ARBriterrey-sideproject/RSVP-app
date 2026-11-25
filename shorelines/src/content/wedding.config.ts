@@ -116,12 +116,13 @@ export const weddingConfig: WeddingConfig = {
    * fallback. Neither is the short link itself: a shortener is a redirect
    * someone else can retire, while both of these are the place's own facts.
    *
-   * The Engagement and Ring Exchange is the couple's addition, on the 28th
-   * before the Mehendi. **Its time is a working figure, not a confirmed one** —
-   * the couple said "say 28th Dec"; 5 pm sets the ring exchange at sunset and
-   * leaves half an hour before the Mehendi opens at 7. They can move it, and
-   * the Mehendi they're still unsure about, from the dashboard without a
-   * rebuild — times are overlay data (see WeddingOverlay in schema.ts).
+   * Revised by the couple on 25 Nov 2026: "28 - evening - engagement, 29 -
+   * 8 AM - haldi, 1 pm - mehendi, 6.30 pm - sangeet". So the Engagement and
+   * Ring Exchange is now the 28th's only event; its 5 pm start is still our
+   * reading of "evening", not a time they named. The Mehendi moved off the 28th
+   * to the 29th afternoon, between the Haldi and the Sangeet. End times are
+   * ours too — the message gave starts only. Times are overlay data (see
+   * WeddingOverlay in schema.ts), so later moves needn't be a rebuild.
    *
    * It reuses `warmgold` because there are five accent names and six events;
    * the Haldi is on a different day, so the two never sit adjacent except in
@@ -160,22 +161,22 @@ export const weddingConfig: WeddingConfig = {
     {
       id: "mehendi",
       name: "Mehendi",
-      startsAt: "2026-12-28T19:00:00+05:30",
-      endsAt: "2026-12-28T21:00:00+05:30",
+      startsAt: "2026-12-29T13:00:00+05:30",
+      endsAt: "2026-12-29T15:00:00+05:30",
       venue: "OTDC Panthanivas",
       venueShort: "OTDC Panthanivas",
       mapsQuery: OTDC_PANTHANIVAS,
       mapsCid: OTDC_PANTHANIVAS_CID,
       dressCode: "Linen & green",
-      daypart: "Evening",
+      daypart: "Afternoon",
       tiers: ["full"],
       accent: "palm",
     },
     {
       id: "haldi",
       name: "Haldi",
-      startsAt: "2026-12-29T10:00:00+05:30",
-      endsAt: "2026-12-29T14:00:00+05:30",
+      startsAt: "2026-12-29T08:00:00+05:30",
+      endsAt: "2026-12-29T10:00:00+05:30",
       venue: "OTDC Panthanivas",
       venueShort: "OTDC Panthanivas",
       mapsQuery: OTDC_PANTHANIVAS,
@@ -188,8 +189,8 @@ export const weddingConfig: WeddingConfig = {
     {
       id: "sangeet",
       name: "Sangeet",
-      startsAt: "2026-12-29T18:00:00+05:30",
-      endsAt: "2026-12-29T21:00:00+05:30",
+      startsAt: "2026-12-29T18:30:00+05:30",
+      endsAt: "2026-12-29T21:30:00+05:30",
       venue: "OTDC Panthanivas",
       venueShort: "OTDC Panthanivas",
       mapsQuery: OTDC_PANTHANIVAS,
@@ -233,9 +234,9 @@ export const weddingConfig: WeddingConfig = {
   /**
    * Meals and other fixed points. Merged with events by time on the timeline.
    *
-   * The 28th's dinner has no separate slot in the couple's schedule — it reads
-   * "7 to 9 pm - Mehandi, and Dinner", one thing, so it stays a note on the
-   * Mehendi rather than a second line at the same hour.
+   * The 28th's dinner has no slot. It used to be part of the Mehendi ("7 to 9
+   * pm - Mehandi, and Dinner"); the Mehendi has since moved to the 29th
+   * afternoon, and the couple haven't said where the 28th's dinner now sits.
    */
   schedule: [
     { id: "breakfast-29", name: "Breakfast", startsAt: "2026-12-29T08:00:00+05:30" },

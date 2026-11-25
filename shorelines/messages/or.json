@@ -21,7 +21,7 @@
         "name": "ନିଶ୍ଚିତାର୍ଥ ଓ ଅଙ୍ଗୁଠି ବଦଳ",
         "daypart": "ସୂର୍ଯ୍ୟାସ୍ତ"
       },
-      "mehendi": { "name": "ମେହେନ୍ଦି", "daypart": "ସନ୍ଧ୍ୟା" },
+      "mehendi": { "name": "ମେହେନ୍ଦି", "daypart": "ଅପରାହ୍ନ" },
       "haldi": { "name": "ହଳଦୀ", "daypart": "ସକାଳ" },
       "sangeet": { "name": "ସଙ୍ଗୀତ", "daypart": "ସନ୍ଧ୍ୟା" },
       "wedding": { "name": "ବିବାହ", "daypart": "ସକାଳ", "highlight": "ମୁହୂର୍ତ୍ତ" },
