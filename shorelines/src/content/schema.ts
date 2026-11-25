@@ -209,7 +209,11 @@ export interface WeddingConfig {
     coordinates: { lat: number; lng: number };
   };
   logistics: LogisticsConfig;
-  /** Chronological. The landing, timeline and day-picker render it as given. */
+  /**
+   * Any order. Sorted by `startsAt` on read (`inChronologicalOrder` in
+   * overlay.ts), so the landing, timeline and day-picker are always in time
+   * order — including after a time is changed from the dashboard.
+   */
   events: WeddingEvent[];
   /** Meals and other fixed points, merged into the timeline by time. */
   schedule: ScheduleItem[];
