@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { EVENTS, tierCode } from "@/content/wedding";
-import type { EventId } from "@/content/wedding";
+import { tierCode } from "@/content/wedding";
+import type { EventId, WeddingEvent } from "@/content/wedding";
 import { deleteResponse, flagResponse } from "@/lib/firebase/responses";
 import { leadName, listRsvps, type RsvpRecord } from "@/lib/firebase/rsvps";
 import { useStaffAuth } from "./StaffAuthProvider";
@@ -17,7 +17,12 @@ import { PanelNote } from "./panelKit";
  * as `mealsForEvents` assumes on the guest side.
  */
 
-export function RepliesPanel() {
+/**
+ * `events` is the live, chronologically sorted list from the dashboard's
+ * config — not the compiled list — so the headcount cards follow the order
+ * guests see after a time edit.
+ */
+export function RepliesPanel({ events }: { events: WeddingEvent[] }) {
   const { allows } = useStaffAuth();
   const [records, setRecords] = useState<RsvpRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +57,7 @@ export function RepliesPanel() {
     })();
   }, []);
 
-  const stats = useMemo(() => statsByEvent(records ?? []), [records]);
+  const stats = useMemo(() => statsByEvent(events, records ?? []), [events, records]);
 
   const filtered = useMemo(() => {
     if (!records) return [];
@@ -130,7 +135,7 @@ export function RepliesPanel() {
       ) : null}
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-        {EVENTS.map((event) => {
+        {events.map((event) => {
           const s = stats.get(event.id);
           return (
             <div
@@ -195,7 +200,7 @@ export function RepliesPanel() {
             </div>
 
             <p className="mt-2 font-sans text-[12px] text-driftwood-soft">
-              Attending: {attendingLabel(record.perEventAttendance)}
+              Attending: {attendingLabel(events, record.perEventAttendance)}
             </p>
 
             {record.notes ? (
@@ -272,8 +277,11 @@ function tierLabel(tier: RsvpRecord["tier"]): string {
   return "Full invite";
 }
 
-function attendingLabel(attendance: RsvpRecord["perEventAttendance"]): string {
-  const yes = EVENTS.filter((event) => attendance[event.id]).map(
+function attendingLabel(
+  events: WeddingEvent[],
+  attendance: RsvpRecord["perEventAttendance"]
+): string {
+  const yes = events.filter((event) => attendance[event.id]).map(
     (event) => event.name
   );
   return yes.length > 0 ? yes.join(", ") : "Nothing yet";
@@ -286,14 +294,17 @@ interface EventStats {
   parties: number;
 }
 
-function statsByEvent(records: RsvpRecord[]): Map<EventId, EventStats> {
+function statsByEvent(
+  events: WeddingEvent[],
+  records: RsvpRecord[]
+): Map<EventId, EventStats> {
   const stats = new Map<EventId, EventStats>();
-  for (const event of EVENTS) {
+  for (const event of events) {
     stats.set(event.id, { headcount: 0, veg: 0, nonVeg: 0, parties: 0 });
   }
 
   for (const record of records) {
-    for (const event of EVENTS) {
+    for (const event of events) {
       if (!record.perEventAttendance[event.id]) continue;
       const s = stats.get(event.id)!;
       s.headcount += record.partySize;
