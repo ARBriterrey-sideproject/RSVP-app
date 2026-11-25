@@ -21,7 +21,7 @@
         "name": "ನಿಶ್ಚಿತಾರ್ಥ ಮತ್ತು ಉಂಗುರ ವಿನಿಮಯ",
         "daypart": "ಸೂರ್ಯಾಸ್ತ"
       },
-      "mehendi": { "name": "ಮೆಹೆಂದಿ", "daypart": "ಸಂಜೆ" },
+      "mehendi": { "name": "ಮೆಹೆಂದಿ", "daypart": "ಮಧ್ಯಾಹ್ನ" },
       "haldi": { "name": "ಅರಿಶಿನ", "daypart": "ಬೆಳಗ್ಗೆ" },
       "sangeet": { "name": "ಸಂಗೀತ", "daypart": "ಸಂಜೆ" },
       "wedding": { "name": "ವಿವಾಹ", "daypart": "ಬೆಳಗ್ಗೆ", "highlight": "ಮುಹೂರ್ತ" },

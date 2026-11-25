@@ -1530,9 +1530,9 @@ function newRecoveryCode(): string {
  */
 const EVENT_START_TIMES: Record<string, { startsAt: string; endsAt: string }> = {
   engagement: { startsAt: "2026-12-28T17:00:00+05:30", endsAt: "2026-12-28T18:30:00+05:30" },
-  mehendi: { startsAt: "2026-12-28T19:00:00+05:30", endsAt: "2026-12-28T21:00:00+05:30" },
-  haldi: { startsAt: "2026-12-29T10:00:00+05:30", endsAt: "2026-12-29T14:00:00+05:30" },
-  sangeet: { startsAt: "2026-12-29T18:00:00+05:30", endsAt: "2026-12-29T21:00:00+05:30" },
+  mehendi: { startsAt: "2026-12-29T13:00:00+05:30", endsAt: "2026-12-29T15:00:00+05:30" },
+  haldi: { startsAt: "2026-12-29T08:00:00+05:30", endsAt: "2026-12-29T10:00:00+05:30" },
+  sangeet: { startsAt: "2026-12-29T18:30:00+05:30", endsAt: "2026-12-29T21:30:00+05:30" },
   wedding: { startsAt: "2026-12-30T10:00:00+05:30", endsAt: "2026-12-30T14:00:00+05:30" },
   reception: { startsAt: "2026-12-30T18:30:00+05:30", endsAt: "2026-12-30T21:00:00+05:30" },
 };
