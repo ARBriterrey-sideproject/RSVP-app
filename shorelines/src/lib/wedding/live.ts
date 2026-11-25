@@ -7,26 +7,34 @@ import type { WeddingConfig, WeddingOverlay } from "@/content/schema";
 /**
  * READING THE RUNTIME OVERLAY, SERVER-SIDE.
  *
- * Over the Firestore REST API with a plain `fetch`, rather than the client SDK
- * or `firebase-admin`. Three reasons, in order of weight:
+ * From the `getWeddingLive` HTTP function (functions/src/index.ts), with a
+ * plain `fetch`. Two reasons it is a fetch and not an SDK call:
  *
  *   1. `fetch` is the thing Next caches. `next: { revalidate, tags }` gives one
- *      Firestore read per minute across every guest hitting the landing, for
- *      free — an SDK call is opaque to the cache and would be a read per render.
- *   2. No new dependency and no service-account credential. `config/live` is a
- *      public `get` in the rules by design (see the note there), so an
- *      unauthenticated read is the *correct* level of access, not a shortcut.
- *   3. It works identically against the emulator, so this path is exercised in
- *      development rather than only in production.
+ *      read per minute across every guest hitting the landing, for free — an
+ *      SDK call is opaque to the cache and would be a read per render.
+ *   2. No new dependency and no service-account credential on Vercel.
  *
- * The one cost is decoding Firestore's REST value envelope by hand, below.
+ * WHY NOT THE FIRESTORE REST API, as this file used to do: App Check is
+ * enforced on Firestore in production, and it refuses a request with no App
+ * Check token with a 403 *before the rules are consulted* — so the public
+ * `get` the rules grant on `config/live` was unreachable from a server, which
+ * has no browser to mint a token. Because nothing in here throws, that failure
+ * was silent: every dashboard edit saved, and every guest kept being shown the
+ * compiled times. It worked against the emulator, which has no App Check. The
+ * function reads with the Admin SDK, which App Check does not gate, and serves
+ * exactly what the rules already make public.
+ *
+ * The emulator path goes through the same function on the Functions emulator,
+ * so development exercises the production read rather than a lookalike.
  */
 
-// Port override: see the note beside connectFirestoreEmulator in
-// src/lib/firebase/client.ts — the two have to agree.
-const EMULATOR_HOST = `http://127.0.0.1:${
-  process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_PORT ?? "8080"
-}`;
+// The function's own region. Must match REGION in functions/src/index.ts.
+const FUNCTIONS_REGION = "asia-south1";
+
+// Functions emulator port: see connectEmulatorsOnce in
+// src/lib/firebase/client.ts and firebase.json — the three have to agree.
+const FUNCTIONS_EMULATOR_HOST = "http://127.0.0.1:5001";
 
 export interface ReadOptions {
   /**
@@ -40,16 +48,13 @@ export interface ReadOptions {
   fresh?: boolean;
 }
 
-function documentUrl(): string | null {
+function overlayUrl(): string | null {
   const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   if (!projectId) return null;
 
-  const base =
-    process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true"
-      ? EMULATOR_HOST
-      : "https://firestore.googleapis.com";
-
-  return `${base}/v1/projects/${projectId}/databases/(default)/documents/config/live`;
+  return process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true"
+    ? `${FUNCTIONS_EMULATOR_HOST}/${projectId}/${FUNCTIONS_REGION}/getWeddingLive`
+    : `https://${FUNCTIONS_REGION}-${projectId}.cloudfunctions.net/getWeddingLive`;
 }
 
 /**
@@ -66,7 +71,7 @@ function documentUrl(): string | null {
 export async function getWeddingOverlay(
   options: ReadOptions = {}
 ): Promise<WeddingOverlay | null> {
-  const url = documentUrl();
+  const url = overlayUrl();
   if (!url) return null;
 
   try {
@@ -83,15 +88,17 @@ export async function getWeddingOverlay(
         : { next: { revalidate: 60, tags: ["wedding-live"] } }),
     });
 
-    // 404 is "no overlay yet". Anything else non-OK is a real fault.
+    // "No overlay yet" arrives as 200 with a null body (decodeOverlay returns
+    // null for it). A 404 is still read the same way, for a function deployed
+    // before that change. Anything else non-OK is a real fault, and Next keeps
+    // serving the last good response while it lasts, which is what we want.
     if (response.status === 404) return null;
     if (!response.ok) {
       console.error(`[wedding] config/live read failed: ${response.status}`);
       return null;
     }
 
-    const body = (await response.json()) as { fields?: Record<string, RestValue> };
-    return decodeOverlay(body.fields);
+    return decodeOverlay(await response.json());
   } catch (error) {
     console.error("[wedding] config/live unreachable", error);
     return null;
@@ -125,62 +132,16 @@ export async function getLiveWeddingSnapshot(
   return { config: applyOverlay(getWeddingConfig(), overlay), overlay };
 }
 
-/* -------------------------------------------------------------------------
- * Firestore REST decoding.
- *
- * The REST API returns every value wrapped in a one-key object naming its type
- * — `{"stringValue": "…"}`, `{"mapValue": {"fields": {…}}}`. The SDKs hide this;
- * over `fetch` it has to be unwrapped. Kept narrow on purpose: only the types
- * the overlay can actually contain are handled, so an unexpected shape decodes
- * to `undefined` and is dropped by the guards in `applyOverlay` rather than
- * being coerced into something plausible.
- * ---------------------------------------------------------------------- */
-
-type RestValue = {
-  stringValue?: string;
-  integerValue?: string;
-  doubleValue?: number;
-  booleanValue?: boolean;
-  nullValue?: null;
-  mapValue?: { fields?: Record<string, RestValue> };
-  arrayValue?: { values?: RestValue[] };
-};
-
-function decodeValue(value: RestValue | undefined): unknown {
-  if (!value) return undefined;
-  if (value.stringValue !== undefined) return value.stringValue;
-  if (value.booleanValue !== undefined) return value.booleanValue;
-  if (value.integerValue !== undefined) return Number(value.integerValue);
-  if (value.doubleValue !== undefined) return value.doubleValue;
-  if (value.mapValue !== undefined) return decodeFields(value.mapValue.fields);
-  if (value.arrayValue !== undefined)
-    return (value.arrayValue.values ?? []).map(decodeValue);
-  return undefined;
-}
-
-function decodeFields(
-  fields: Record<string, RestValue> | undefined
-): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(fields ?? {})) {
-    out[key] = decodeValue(value);
-  }
-  return out;
-}
-
 /**
- * Shapes the decoded document as a `WeddingOverlay` without asserting it is
- * one. Every field stays optional and every value is checked for type at the
- * point it is used — `applyOverlay` drops a `startsAt` that isn't a valid
- * instant, and a contact missing a name never renders. The document is written
- * only by a validating callable, so this is defence in depth against an older
- * write or a hand-edited emulator, not the primary check.
+ * Shapes the response as a `WeddingOverlay` without asserting it is one. Every
+ * field stays optional and every value is checked for type at the point it is
+ * used — `applyOverlay` drops a `startsAt` that isn't a valid instant, and a
+ * contact missing a name never renders. The document is written only by a
+ * validating callable, so this is defence in depth against an older write or a
+ * hand-edited emulator, not the primary check.
  */
-function decodeOverlay(
-  fields: Record<string, RestValue> | undefined
-): WeddingOverlay | null {
-  if (!fields) return null;
-  const raw = decodeFields(fields);
+function decodeOverlay(raw: unknown): WeddingOverlay | null {
+  if (!isPlainObject(raw)) return null;
 
   return {
     events: asRecordOfRecords(raw.events),
