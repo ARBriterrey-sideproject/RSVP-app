@@ -33,7 +33,10 @@
     "placeholderGroup": "Message everyone",
     "placeholderConcierge": "Message the coordinators",
     "send": "Send",
-    "sendFailed": "That didn’t send. Try again."
+    "sendFailed": "That didn’t send. Try again.",
+    "signInTitle": "Sign in to join the chat",
+    "signInBody": "Signing in lets you talk with everyone and message the coordinators.",
+    "signInCta": "Sign in"
   },
   "memories": {
     "back": "Back",
@@ -123,16 +126,32 @@
     },
     "songRequests": {
       "title": "Song requests",
-      "body": "Tell the DJ what to play at {event}.",
+      "body": "Tell the DJ what to play at the Sangeet.",
       "cta": "Request a song",
       "overrideNote": "Normally closed by now — open a little longer tonight.",
-      "titleLabel": "Song title",
+      "closed": "Song requests have closed for tonight.",
+      "signIn": "Sign in to request a song",
+      "searchLabel": "Search a song or artist",
+      "searching": "Searching…",
+      "noResults": "No matches found. You can still send it as typed.",
+      "searchFailed": "Search isn’t available right now. You can still send it as typed.",
+      "asTyped": "Request “{query}” as typed",
+      "change": "Change",
       "artistLabel": "Artist (optional)",
       "noteLabel": "Note for the DJ (optional)",
       "submit": "Send request",
       "submitting": "Sending…",
-      "sendFailed": "That didn’t send. Try again.",
-      "sent": "Sent — thanks!"
+      "sent": "Sent — thanks!",
+      "alreadyRequested": "You’ve already asked for this one — counted.",
+      "another": "Request another",
+      "artworkCredit": "Artwork: Apple Music",
+      "error": {
+        "signIn": "Please sign in to request a song.",
+        "closed": "Song requests have closed.",
+        "limit": "You’ve reached the limit of 10 songs.",
+        "invalid": "Please check the song details and try again.",
+        "sendFailed": "That didn’t send. Try again."
+      }
     }
   },
   "upcoming": {
@@ -318,6 +337,38 @@
       "cta": "Add to home screen"
     }
   },
+  "join": {
+    "title": "Join the celebration",
+    "intro": "Sign in to chat, share photos, vote in polls and request songs during the wedding.",
+    "checking": "One moment…",
+    "google": "Continue with Google",
+    "signingIn": "Signing in…",
+    "or": "or",
+    "usePhone": "Use my phone number instead",
+    "numberLabel": "Mobile number",
+    "numberHint": "We’ll text you a code. Indian numbers need no country code.",
+    "codeIntro": "Enter the 6-digit code we sent to {phone}.",
+    "codeLabel": "6-digit code",
+    "send": "Send code",
+    "sending": "Sending…",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "resend": "Resend code",
+    "changeNumber": "Change number",
+    "footnote": "This isn’t an RSVP — it just lets you into the live features.",
+    "signedInTitle": "You’re in",
+    "signedInBody": "Taking you to the celebration…",
+    "continue": "Continue",
+    "errors": {
+      "generic": "Something went wrong. Please try again.",
+      "badNumber": "Please enter a valid mobile number.",
+      "badCode": "That code isn’t right. Check it and try again.",
+      "expired": "That code has expired. Ask for a new one.",
+      "tooMany": "Too many attempts. Please wait a little and try again.",
+      "network": "Can’t connect. Check your internet and try again."
+    }
+  },
+
   "shared": {
     "loading": "Opening the invitation…",
     "missingTitle": "We can’t find that",

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import QRCode from "qrcode";
 import { COUPLE } from "@/content/wedding";
+import { useLinkQr } from "@/lib/qr";
 import { Eyebrow } from "./ui";
 
 /**
@@ -22,7 +22,7 @@ import { Eyebrow } from "./ui";
  */
 export function FamilyShare({ shareCode }: { shareCode: string }) {
   const t = useTranslations("rsvp.share");
-  const link = useShareLink(shareCode);
+  const link = useLinkQr(`/i/${shareCode}`);
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -76,51 +76,4 @@ export function FamilyShare({ shareCode }: { shareCode: string }) {
       </div>
     </div>
   );
-}
-
-/**
- * The share URL and its QR, resolved together.
- *
- * The origin is read from the browser rather than a configured base URL,
- * because there isn't one yet — the domain is still an open question, and on
- * the emulator the app is reached by LAN IP as often as by localhost. Whatever
- * host the guest is on is the host their family can reach.
- *
- * Both land in one piece of state on purpose: the URL is only knowable in the
- * browser, so a separate hook for it would mean a setState in an effect body
- * and a cascading render on every mount.
- */
-function useShareLink(
-  shareCode: string
-): { url: string; qr: string | null } | null {
-  const [link, setLink] = useState<{ url: string; qr: string | null } | null>(
-    null
-  );
-
-  useEffect(() => {
-    let live = true;
-    const url = `${window.location.origin}/i/${shareCode}`;
-
-    QRCode.toDataURL(url, {
-      margin: 1,
-      width: 320,
-      errorCorrectionLevel: "M",
-      // Deeptide on white. Anything lighter than this stops scanning reliably
-      // off a phone screen at an angle, which is exactly how it gets used.
-      color: { dark: "#1F6F73FF", light: "#FFFFFFFF" },
-    })
-      .then((qr) => {
-        if (live) setLink({ url, qr });
-      })
-      .catch(() => {
-        // No QR is survivable — the copyable link is right beside it.
-        if (live) setLink({ url, qr: null });
-      });
-
-    return () => {
-      live = false;
-    };
-  }, [shareCode]);
-
-  return link;
 }

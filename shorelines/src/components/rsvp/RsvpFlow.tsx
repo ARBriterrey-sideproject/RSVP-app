@@ -59,11 +59,17 @@ let signInStarted = false;
 /**
  * Whether this session is one an RSVP may be filed under.
  *
- * A recovery-code sign-in passes too — it's a custom token minted for the
- * guest's own phone-derived uid, so it lands on the same document.
+ * Needs a phone number on the account, not merely a non-anonymous one: the
+ * venue QR (`/join`) signs guests in with Google, and a Google uid is not the
+ * phone-derived uid `rsvps/{ownerUid}` is keyed by — filing a reply under it
+ * would defeat one-number-one-reply. Such a guest is shown the phone gate.
+ *
+ * A recovery-code sign-in still passes — it's a custom token minted for the
+ * guest's own phone-derived uid, so the account it lands on carries that
+ * `phoneNumber`.
  */
 function isVerified(user: User | null): user is User {
-  return user !== null && !user.isAnonymous;
+  return user !== null && !user.isAnonymous && !!user.phoneNumber;
 }
 
 export function RsvpFlow({

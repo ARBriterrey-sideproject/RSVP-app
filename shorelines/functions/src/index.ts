@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
@@ -1726,11 +1726,74 @@ export const castVote = onCall(
 );
 
 /**
- * A DJ song request. Cutoff is 1 hour before the event's real, possibly
- * overlay-adjusted start time — read the same overlay-first-then-literal way
- * the client does, never trusting a client-sent time — unless the couple/admin
- * has set config/live.songRequestsOverride, which keeps every event's queue
- * open regardless of the clock.
+ * Song identity for de-duplicating DJ requests.
+ *
+ * DUPLICATED VERBATIM from src/lib/music/songKey.ts (`normaliseSongText` /
+ * `songKey`) — Cloud Functions can't import from src/. Keep the two in sync,
+ * same pattern as `normaliseDietary`. The key is always computed here, never
+ * taken from the client.
+ */
+function songFold(s: string): string {
+  return s.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function songSquash(s: string): string {
+  return s
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normaliseSongText(s: string): string {
+  let t = songFold(s);
+  t = t.replace(/\([^)]*\)|\[[^\]]*\]/g, " ");
+  t = t.replace(/\s[-\u2013\u2014]\s.*$/, " ");
+  t = t.replace(/\s(?:feat|ft)\b.*$/, " ");
+  return songSquash(t);
+}
+
+function songFirstArtist(artist: string): string {
+  const t = songFold(artist);
+  const first = t.split(/\s*,\s*|\s*&\s*|\s+x\s+|\s+feat\b|\s+ft\b|\s+and\s+/)[0] ?? "";
+  return songSquash(first.replace(/\([^)]*\)|\[[^\]]*\]/g, " "));
+}
+
+function songKey(title: string, artist: string): string {
+  return `${normaliseSongText(title)}|${songFirstArtist(artist ?? "")}`;
+}
+
+/** Song requests are for the one event with a DJ. */
+const SONG_REQUEST_EVENT_ID = "sangeet";
+const MAX_ALBUM_LEN = 160;
+/** Distinct songs one guest may request — a soft guard against a runaway client. */
+const MAX_SONGS_PER_GUEST = 10;
+
+/** Artwork is hot-linked from Apple's CDN only; anything else is dropped, not rejected. */
+function cleanArtworkUrl(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0 || value.length > 500) {
+    return null;
+  }
+  try {
+    const u = new URL(value);
+    if (u.protocol !== "https:") return null;
+    if (!u.hostname.endsWith(".mzstatic.com")) return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A DJ song request, Sangeet only. Open to any signed-in, non-anonymous
+ * account (phone, Google, recovery token) — no RSVP needed. Cutoff is 1 hour
+ * before the event's real, possibly overlay-adjusted start time — read the
+ * same overlay-first-then-literal way the client does, never trusting a
+ * client-sent time — unless the couple/admin has set
+ * config/live.songRequestsOverride, which keeps the queue open regardless of
+ * the clock.
+ *
+ * Idempotent per guest per song: the doc id is hash(songKey)_uid, so asking
+ * twice returns `alreadyRequested: true` without overwriting.
  */
 export const submitSongRequest = onCall(
   { region: REGION, enforceAppCheck: ENFORCE_APP_CHECK },
@@ -1739,51 +1802,95 @@ export const submitSongRequest = onCall(
     if (!uid) {
       throw new HttpsError("unauthenticated", "Sign in before requesting a song.");
     }
+    if (request.auth?.token.firebase?.sign_in_provider === "anonymous") {
+      throw new HttpsError("unauthenticated", "Sign in before requesting a song.");
+    }
 
-    const { eventId, title, artist, note } = (request.data ?? {}) as {
-      eventId?: unknown;
-      title?: unknown;
-      artist?: unknown;
-      note?: unknown;
-    };
-    assert(
-      typeof eventId === "string" &&
-        Object.prototype.hasOwnProperty.call(EVENT_START_TIMES, eventId),
-      "eventId is not a recognised event"
-    );
+    const { eventId, title, artist, note, trackId, album, artworkUrl } =
+      (request.data ?? {}) as {
+        eventId?: unknown;
+        title?: unknown;
+        artist?: unknown;
+        note?: unknown;
+        trackId?: unknown;
+        album?: unknown;
+        artworkUrl?: unknown;
+      };
 
-    const rsvpSnap = await db.collection("rsvps").doc(uid).get();
+    const event = eventId === undefined || eventId === null ? SONG_REQUEST_EVENT_ID : eventId;
+    assert(event === SONG_REQUEST_EVENT_ID, "Song requests are only open for the Sangeet.");
+
+    const cleanTitle = cleanString(title, MAX_SONG_LEN, "title");
+    const cleanArtist = optionalString(artist, MAX_ARTIST_LEN, "artist");
+    const cleanAlbum = optionalString(album, MAX_ALBUM_LEN, "album");
+    const cleanNote = optionalString(note, MAX_NOTE_LEN, "note");
     assert(
-      rsvpSnap.exists && rsvpSnap.get(`perEventAttendance.${eventId}`) === true,
-      "You're not attending that event."
+      trackId === undefined ||
+        trackId === null ||
+        (typeof trackId === "number" && Number.isSafeInteger(trackId) && trackId > 0),
+      "trackId must be a positive integer"
     );
+    const cleanTrackId = typeof trackId === "number" ? trackId : null;
+
+    const key = songKey(cleanTitle, cleanArtist ?? "");
+    assert(key.split("|")[0].length > 0, "title must contain a song name");
 
     const overlaySnap = await db.collection("config").doc("live").get();
-    const overrideStart = overlaySnap.get(`events.${eventId}.startsAt`) as
+    const overrideStart = overlaySnap.get(`events.${SONG_REQUEST_EVENT_ID}.startsAt`) as
       | string
       | undefined;
     const startsAtMs = Date.parse(
-      overrideStart ?? EVENT_START_TIMES[eventId as string].startsAt
+      overrideStart ?? EVENT_START_TIMES[SONG_REQUEST_EVENT_ID].startsAt
     );
 
     const deadlineLifted = overlaySnap.get("songRequestsOverride") === true;
-    if (!deadlineLifted) {
-      assert(
-        Date.now() < startsAtMs - SONG_REQUEST_CUTOFF_MS,
+    if (!deadlineLifted && !(Date.now() < startsAtMs - SONG_REQUEST_CUTOFF_MS)) {
+      throw new HttpsError(
+        "failed-precondition",
         "Song requests for this event have closed."
       );
     }
 
-    const ref = await db.collection("songRequests").add({
-      eventId,
-      ownerUid: uid,
-      title: cleanString(title, MAX_SONG_LEN, "title"),
-      artist: optionalString(artist, MAX_ARTIST_LEN, "artist"),
-      note: optionalString(note, MAX_NOTE_LEN, "note"),
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    const id = `${createHash("sha1").update(key).digest("hex").slice(0, 20)}_${uid}`;
+    const ref = db.collection("songRequests").doc(id);
 
-    return { ok: true, id: ref.id };
+    if ((await ref.get()).exists) return { id, alreadyRequested: true };
+
+    const countSnap = await db
+      .collection("songRequests")
+      .where("ownerUid", "==", uid)
+      .count()
+      .get();
+    if (countSnap.data().count >= MAX_SONGS_PER_GUEST) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `You can request up to ${MAX_SONGS_PER_GUEST} songs.`
+      );
+    }
+
+    try {
+      await ref.create({
+        eventId: SONG_REQUEST_EVENT_ID,
+        ownerUid: uid,
+        title: cleanTitle,
+        artist: cleanArtist ?? "",
+        note: cleanNote ?? "",
+        songKey: key,
+        trackId: cleanTrackId,
+        album: cleanAlbum,
+        artworkUrl: cleanArtworkUrl(artworkUrl),
+        matched: cleanTrackId !== null,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      // gRPC ALREADY_EXISTS (6): a concurrent twin won the race.
+      if ((err as { code?: unknown }).code === 6) {
+        return { id, alreadyRequested: true };
+      }
+      throw err;
+    }
+
+    return { id, alreadyRequested: false };
   }
 );
 

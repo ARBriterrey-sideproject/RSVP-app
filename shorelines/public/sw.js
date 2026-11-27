@@ -18,7 +18,10 @@
 //    be actively wrong, not just unhelpful.
 const CACHE_NAME = "shorelines-shell-v1";
 
-const EXCLUDED_PATH_PREFIXES = ["/dashboard", "/manifest"];
+// /join is the venue-QR sign-in: it must always hit the network, since a cached
+// copy would replay a stale sign-in state. /__/auth is Firebase's own redirect
+// helper (relevant if the auth domain is ever this origin).
+const EXCLUDED_PATH_PREFIXES = ["/dashboard", "/manifest", "/join", "/__/auth"];
 
 self.addEventListener("install", () => {
   self.skipWaiting();

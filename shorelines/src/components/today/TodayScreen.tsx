@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
+import { onAuthStateChanged } from "firebase/auth";
 import { onSnapshot } from "firebase/firestore";
 import { getFirebase } from "@/lib/firebase/client";
 import { useGuestRsvp } from "@/components/today/useGuestRsvp";
@@ -31,7 +32,8 @@ import {
   type Poll,
   type PollVote,
 } from "@/lib/firebase/polls";
-import { submitSongRequest } from "@/lib/firebase/songRequests";
+import { SONG_REQUEST_EVENT_ID } from "@/lib/firebase/songRequests";
+import { SongRequestCard } from "@/components/today/SongRequestCard";
 import {
   ACCENT_FILL,
   ACCENT_TINT,
@@ -182,135 +184,6 @@ function PollMiniRow({ poll }: { poll: Poll }) {
 }
 
 const SONG_REQUEST_CUTOFF_MS = 60 * 60 * 1000;
-
-/**
- * Inline expand-to-form, not a route — the plan calls for "a small request
- * form", and there's only ever one relevant event (`nextEvent`) to attach it
- * to. The 1-hour cutoff and attendance check are re-verified server-side in
- * `submitSongRequest`; what's computed here only decides whether to show the
- * banner at all.
- */
-function SongRequestBanner({
-  event,
-  eventLabel,
-  overrideActive,
-  t,
-}: {
-  event: WeddingEvent;
-  eventLabel: string;
-  overrideActive: boolean;
-  t: Lookup;
-}) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [artist, setArtist] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
-
-  async function handleSubmit() {
-    if (!title.trim() || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await submitSongRequest(
-        event.id,
-        title.trim(),
-        artist.trim() || undefined,
-        note.trim() || undefined
-      );
-      setTitle("");
-      setArtist("");
-      setNote("");
-      setSent(true);
-    } catch (cause) {
-      setError(
-        cause instanceof Error ? cause.message : t("songRequests.sendFailed")
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="rounded-card border border-driftwood/[0.08] bg-foam px-5 py-4.5">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen((v) => !v);
-          setSent(false);
-          setError(null);
-        }}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <div>
-          <p className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.28em] text-driftwood-faint">
-            {t("songRequests.title")}
-          </p>
-          <p className="mt-1.5 font-sans text-[13px] leading-[1.5] text-driftwood-soft">
-            {t("songRequests.body", { event: eventLabel })}
-          </p>
-          {overrideActive ? (
-            <p className="mt-1 font-sans text-[11.5px] text-coral-ink">
-              {t("songRequests.overrideNote")}
-            </p>
-          ) : null}
-        </div>
-        <span className="flex-none font-sans text-[11.5px] font-medium text-coral-ink">
-          {t("songRequests.cta")}
-        </span>
-      </button>
-
-      {open ? (
-        <div className="mt-3.5 flex flex-col gap-2.5 border-t border-driftwood/[0.08] pt-3.5">
-          {/*
-            The placeholder is the only visible copy here, so it has to be
-            mirrored into aria-label: a placeholder is not an accessible name,
-            and without this a screen reader announces three bare edit fields.
-          */}
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            aria-label={t("songRequests.titleLabel")}
-            placeholder={t("songRequests.titleLabel")}
-            className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
-          />
-          <input
-            value={artist}
-            onChange={(e) => setArtist(e.target.value)}
-            aria-label={t("songRequests.artistLabel")}
-            placeholder={t("songRequests.artistLabel")}
-            className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
-          />
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            aria-label={t("songRequests.noteLabel")}
-            placeholder={t("songRequests.noteLabel")}
-            className="rounded-card bg-card px-3.5 py-2.5 font-sans text-[14px] text-driftwood outline-none placeholder:text-driftwood-faint"
-          />
-          {error ? (
-            <p className="font-sans text-[12.5px] text-coral-ink">{error}</p>
-          ) : null}
-          {sent && !error ? (
-            <p className="font-sans text-[12.5px] text-palm">
-              {t("songRequests.sent")}
-            </p>
-          ) : null}
-          <button
-            type="button"
-            disabled={!title.trim() || busy}
-            onClick={() => void handleSubmit()}
-            className="self-start rounded-pill bg-coral px-5 py-2.5 font-sans text-[13.5px] font-medium text-foam disabled:opacity-40"
-          >
-            {busy ? t("songRequests.submitting") : t("songRequests.submit")}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 export function TodayScreen({
   tier,
@@ -477,16 +350,30 @@ export function TodayScreen({
     return () => controller.abort();
   }, [config.destination.coordinates, timeZone, locale]);
 
-  const songRequestsOpen = useMemo(() => {
-    if (!nextEvent) return false;
-    if (songRequestsOverride) return true;
-    return now.getTime() < Date.parse(nextEvent.startsAt) - SONG_REQUEST_CUTOFF_MS;
-  }, [nextEvent, now, songRequestsOverride]);
-  const songRequestsOverrideActive = Boolean(
-    songRequestsOverride &&
-      nextEvent &&
-      now.getTime() >= Date.parse(nextEvent.startsAt) - SONG_REQUEST_CUTOFF_MS
-  );
+  // The Sangeet is the only event song requests attach to, and a request needs
+  // no RSVP — so it's looked up in the config, not in the guest's own events.
+  // The card shows from the morning of the Sangeet until it ends; `open` then
+  // folds the cutoff (or the admin override) in. The server re-checks both.
+  const sangeet = config.events.find((e) => e.id === SONG_REQUEST_EVENT_ID);
+  const showSongCard =
+    sangeet !== undefined &&
+    dayKey(sangeet.startsAt, config) === today &&
+    now.getTime() < Date.parse(sangeet.endsAt);
+  const pastCutoff = sangeet
+    ? now.getTime() >= Date.parse(sangeet.startsAt) - SONG_REQUEST_CUTOFF_MS
+    : false;
+  const songRequestsOpen = Boolean(songRequestsOverride) || !pastCutoff;
+  const songRequestsOverrideActive = Boolean(songRequestsOverride) && pastCutoff;
+
+  // Requests need a real (non-anonymous) sign-in — /polls and /memories leave
+  // an anonymous session behind, which must not count.
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    const { auth } = getFirebase();
+    return onAuthStateChanged(auth, (user) =>
+      setSignedIn(user !== null && !user.isAnonymous)
+    );
+  }, []);
 
   const [openPolls, setOpenPolls] = useState<Poll[]>([]);
   useEffect(() => {
@@ -674,13 +561,12 @@ export function TodayScreen({
           </section>
         )}
 
-        {nextEvent && songRequestsOpen && (
+        {showSongCard && (
           <section className="px-6 pt-3.5">
-            <SongRequestBanner
-              event={nextEvent}
-              eventLabel={eventCopy(tWedding, nextEvent).name}
+            <SongRequestCard
+              open={songRequestsOpen}
               overrideActive={songRequestsOverrideActive}
-              t={t}
+              signedIn={signedIn}
             />
           </section>
         )}

@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
@@ -29,6 +30,10 @@ export function ChatScreen({ tier }: { tier: Tier }) {
   const t = useTranslations("chat");
 
   const [uid, setUid] = useState<string | null>(null);
+  // Chat no longer signs anyone in on its own: a guest arrives here from the
+  // venue QR (`/join`) already signed in, or is sent there. `authReady` keeps
+  // the sign-in card from flashing before the persisted session is read back.
+  const [authReady, setAuthReady] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<RoomTab>("group");
   const [text, setText] = useState("");
@@ -38,11 +43,26 @@ export function ChatScreen({ tier }: { tier: Tier }) {
   useEffect(() => {
     const { auth, db } = getFirebase();
     return onAuthStateChanged(auth, async (user) => {
-      if (!user) return;
+      setAuthReady(true);
+      if (!user) {
+        setUid(null);
+        setDisplayName(null);
+        return;
+      }
       setUid(user.uid);
-      const snap = await getDoc(doc(db, "rsvps", user.uid));
-      const name = snap.exists() ? snap.data().party?.[0]?.name : undefined;
-      setDisplayName(typeof name === "string" && name.trim() ? name.trim() : null);
+      // Name chain: the RSVP's first party member, then the Google profile
+      // name, then nothing (the callable falls back to "Guest"). A Google
+      // guest has no `rsvps/{uid}` doc, and an anonymous one has neither.
+      let name: unknown;
+      try {
+        const snap = await getDoc(doc(db, "rsvps", user.uid));
+        name = snap.exists() ? snap.data().party?.[0]?.name : undefined;
+      } catch {
+        name = undefined;
+      }
+      const fromRsvp = typeof name === "string" ? name.trim() : "";
+      const fromProfile = user.displayName?.trim() ?? "";
+      setDisplayName(fromRsvp || fromProfile || null);
     });
   }, []);
 
@@ -61,6 +81,35 @@ export function ChatScreen({ tier }: { tier: Tier }) {
     } finally {
       setSending(false);
     }
+  }
+
+  if (authReady && !uid) {
+    return (
+      <AppShell tab="chat" tier={tier}>
+        <header className="flex-none px-6 pt-8 pb-3">
+          <h1 className="font-serif text-2xl text-deeptide">{t("title")}</h1>
+        </header>
+        <div
+          className="flex flex-1 items-start justify-center px-6 pt-6"
+          style={{ paddingBottom: BOTTOM_TAB_BAR_HEIGHT + 24 }}
+        >
+          <div className="w-full max-w-sm rounded-card bg-card p-5 text-center">
+            <h2 className="font-serif text-xl text-deeptide">
+              {t("signInTitle")}
+            </h2>
+            <p className="mt-2 font-sans text-sm leading-[1.6] text-driftwood-soft">
+              {t("signInBody")}
+            </p>
+            <Link
+              href="/join?next=/chat"
+              className="mt-5 block rounded-pill bg-coral py-3.5 font-sans text-[15px] font-medium text-foam transition-colors hover:bg-coral-deep"
+            >
+              {t("signInCta")}
+            </Link>
+          </div>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
